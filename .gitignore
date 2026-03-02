@@ -1,0 +1,15 @@
+# Environment Variables
+.env
+.venv
+env/
+venv/
+
+# Python Cache
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Execution Output
+generated_infrastructure/
+
+.DS_Store
