@@ -12,5 +12,5 @@ A multi-agent autonomous system designed to architect, generate, and document hi
 
 **1. Clone the repository**
 ```bash
-git clone git clone https://github.com/nolanefe/Cognitive-Agent-Syndicate.git
+git clone https://github.com/nolanefe/Cognitive-Agent-Syndicate.git
 cd Cognitive-Agent-Syndicate 
