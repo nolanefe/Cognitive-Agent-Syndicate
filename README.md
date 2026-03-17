@@ -10,7 +10,11 @@ A multi-agent autonomous system designed to architect, generate, and document hi
 
 ### Build and Execution
 
-**1. Clone the repository**
-```bash
-git clone https://github.com/nolanefe/Cognitive-Agent-Syndicate.git
-cd Cognitive-Agent-Syndicate 
+1. **Clone the repository**
+   ```bash
+   git clone [https://github.com/nolanefe/Cognitive-Agent-Syndicate.git](https://github.com/nolanefe/Cognitive-Agent-Syndicate.git)
+   cd Cognitive-Agent-Syndicate
+
+2. **Run the agent**
+pip install -r requirements.txt
+python main.py
