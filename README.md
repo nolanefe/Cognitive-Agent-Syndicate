@@ -16,5 +16,6 @@ A multi-agent autonomous system designed to architect, generate, and document hi
    cd Cognitive-Agent-Syndicate
 
 2. **Run the agent**
-pip install -r requirements.txt
-python main.py
+   ```bash
+   pip install -r requirements.txt
+   python main.py
