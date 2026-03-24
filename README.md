@@ -20,10 +20,9 @@ Note: Requires Python 3.10+ and an OpenAI API Key.
    ```bash
    git clone https://github.com/nolanefe/Cognitive-Agent-Syndicate.git
    cd Cognitive-Agent-Syndicate
-   ```
+   
 
 2. Run and execute
-   ```bash
    pip install -r requirements.txt
    python main.py
    ```
