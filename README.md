@@ -16,8 +16,8 @@ A multi-agent autonomous system designed to architect, generate, and document hi
 ### Build and Execution
 Note: Requires Python 3.10+ and an OpenAI API Key.
 
+```bash
 1. Clone the repository
-   ```bash
    git clone https://github.com/nolanefe/Cognitive-Agent-Syndicate.git
    cd Cognitive-Agent-Syndicate
    
