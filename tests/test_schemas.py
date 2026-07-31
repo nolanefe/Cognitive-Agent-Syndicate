@@ -210,6 +210,7 @@ def test_usage_metrics_require_non_negative_values() -> None:
 def test_run_report_rejects_negative_timing_metrics() -> None:
     with pytest.raises(ValidationError):
         GateResult(
+            gate_id="schema_validation",
             gate_name="schema_validation",
             status=GateStatus.PASSED,
             message="ok",
@@ -264,6 +265,7 @@ def test_run_report_constructs_with_valid_metrics() -> None:
         brief_title="RAG Pipeline",
         gates=[
             GateResult(
+                gate_id="contract_validation",
                 gate_name="contract_validation",
                 status=GateStatus.PASSED,
                 message="All contracts validated.",

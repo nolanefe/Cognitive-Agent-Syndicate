@@ -5,22 +5,52 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from cognitive_agent_syndicate.orchestration.state import PipelineState
-from cognitive_agent_syndicate.schemas import RunReport
+from cognitive_agent_syndicate.orchestration.state import PipelineStage, PipelineState
+from cognitive_agent_syndicate.schemas import (
+    AttemptOutcome,
+    AttemptSummary,
+    PipelineAttempt,
+    RunReport,
+)
 
 REPORT_LIMITATIONS = [
-    "Generated code was not executed during this pipeline run.",
+    (
+        "Generated code was parsed and statically inspected but never executed "
+        "during this pipeline run."
+    ),
     "Gate evaluation is deterministic and does not run tests or scripts.",
+    (
+        "Forbidden-content detection is a limited static policy check, "
+        "not a complete security scanner."
+    ),
 ]
 
 
 def build_run_report(state: PipelineState, generated_files: list[str]) -> RunReport:
-    reviewer_status = state.review.status if state.review is not None else None
-    manifest = sorted(generated_files) if state.success else []
+    final_review = state.review
+    reviewer_status = final_review.status if final_review is not None else None
+    manifest = sorted(generated_files)
+    attempt_summaries = [
+        AttemptSummary(
+            attempt_number=attempt.attempt_number,
+            outcome=attempt.outcome,
+            reviewer_status=attempt.reviewer_status,
+            gates_passed=attempt.gates_passed,
+            reviewer_approved=attempt.reviewer_approved,
+            failure_reason=attempt.failure_reason,
+            usage=attempt.usage,
+            duration_ms=max(0.0, attempt.duration_ms),
+        )
+        for attempt in state.attempts
+    ]
+    final_gates = state.gate_results
+    if state.attempts:
+        final_gates = state.attempts[-1].gate_results
+
     return RunReport(
         run_id=state.run_id,
         brief_title=state.brief.title,
-        gates=state.gate_results,
+        gates=final_gates,
         usage=state.usage,
         success=state.success,
         artifact_count=len(manifest),
@@ -29,11 +59,82 @@ def build_run_report(state: PipelineState, generated_files: list[str]) -> RunRep
         failure_reason=state.failure_reason,
         generated_files=manifest,
         limitations=list(REPORT_LIMITATIONS),
+        repair_attempted=state.repair_attempted,
+        attempt_count=state.attempt_count or max(1, len(state.attempts)),
+        attempts=attempt_summaries,
+        repair_trigger=state.repair_trigger,
+        wall_clock_duration_ms=max(0.0, state.wall_clock_duration_ms),
+        provider_latency_ms=state.usage.latency_ms,
     )
 
 
-def write_run_reports(*, run_dir: Path, state: PipelineState, generated_files: list[str]) -> None:
-    report = build_run_report(state, generated_files)
+def build_success_run_report_snapshot(
+    *,
+    state: PipelineState,
+    successful_attempt: PipelineAttempt,
+    generated_files: list[str],
+    wall_clock_duration_ms: float,
+) -> RunReport:
+    """Build a success run-report snapshot without mutating pipeline state."""
+    manifest = sorted(generated_files)
+    attempt_summaries = [
+        AttemptSummary(
+            attempt_number=attempt.attempt_number,
+            outcome=(
+                AttemptOutcome.SUCCESS
+                if attempt.attempt_number == successful_attempt.attempt_number
+                else attempt.outcome
+            ),
+            reviewer_status=attempt.reviewer_status,
+            gates_passed=attempt.gates_passed,
+            reviewer_approved=attempt.reviewer_approved,
+            failure_reason=attempt.failure_reason,
+            usage=attempt.usage,
+            duration_ms=max(0.0, attempt.duration_ms),
+        )
+        for attempt in state.attempts
+    ]
+    final_review = (
+        successful_attempt.review if successful_attempt.review is not None else state.review
+    )
+    reviewer_status = final_review.status if final_review is not None else None
+    stages_completed = [
+        *state.stages_completed,
+        PipelineStage.PERSISTENCE,
+        PipelineStage.COMPLETED,
+    ]
+
+    return RunReport(
+        run_id=state.run_id,
+        brief_title=state.brief.title,
+        gates=successful_attempt.gate_results,
+        usage=state.usage,
+        success=True,
+        artifact_count=len(manifest),
+        stages_completed=[stage.value for stage in stages_completed],
+        reviewer_status=reviewer_status,
+        failure_reason=None,
+        generated_files=manifest,
+        limitations=list(REPORT_LIMITATIONS),
+        repair_attempted=state.repair_attempted,
+        attempt_count=state.attempt_count or max(1, len(state.attempts)),
+        attempts=attempt_summaries,
+        repair_trigger=state.repair_trigger,
+        wall_clock_duration_ms=max(0.0, wall_clock_duration_ms),
+        provider_latency_ms=state.usage.latency_ms,
+    )
+
+
+def write_run_reports(
+    *,
+    run_dir: Path,
+    state: PipelineState,
+    generated_files: list[str],
+    report: RunReport | None = None,
+    report_stage: PipelineStage | None = None,
+) -> None:
+    resolved_report = report or build_run_report(state, generated_files)
+    current_stage = report_stage or state.stage
     json_path = run_dir / "run-report.json"
     markdown_path = run_dir / "run-report.md"
 
@@ -41,13 +142,16 @@ def write_run_reports(*, run_dir: Path, state: PipelineState, generated_files: l
         raise FileExistsError("Run report files already exist.")
 
     json_path.write_text(
-        json.dumps(report.model_dump(mode="json"), indent=2, sort_keys=True) + "\n",
+        json.dumps(resolved_report.model_dump(mode="json"), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    markdown_path.write_text(render_run_report_markdown(report, state), encoding="utf-8")
+    markdown_path.write_text(
+        render_run_report_markdown(resolved_report, current_stage=current_stage),
+        encoding="utf-8",
+    )
 
 
-def render_run_report_markdown(report: RunReport, state: PipelineState) -> str:
+def render_run_report_markdown(report: RunReport, *, current_stage: PipelineStage) -> str:
     reviewer_decision = report.reviewer_status.value if report.reviewer_status else "n/a"
     gate_lines = [
         f"- **{gate.gate_name}**: {gate.status.value} — {gate.message}" for gate in report.gates
@@ -57,16 +161,33 @@ def render_run_report_markdown(report: RunReport, state: PipelineState) -> str:
     stages = ", ".join(report.stages_completed) if report.stages_completed else "none"
     outcome = "success" if report.success else "failure"
 
+    attempt_rows = [
+        "| Attempt | Outcome | Reviewer | Gates | Duration (ms) | Tokens |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for attempt in report.attempts:
+        reviewer = attempt.reviewer_status.value if attempt.reviewer_status else "n/a"
+        gates = "passed" if attempt.gates_passed else "failed"
+        attempt_rows.append(
+            f"| {attempt.attempt_number} | {attempt.outcome.value} | {reviewer} | "
+            f"{gates} | {attempt.duration_ms:.1f} | {attempt.usage.total_tokens} |"
+        )
+
     sections = [
         "# Pipeline Run Report",
         "",
         f"- **Run ID**: `{report.run_id}`",
         f"- **Brief title**: {report.brief_title}",
         f"- **Stages completed**: {stages}",
-        f"- **Current stage**: {state.stage.value}",
+        f"- **Current stage**: {current_stage.value}",
         f"- **Reviewer decision**: {reviewer_decision}",
         f"- **Outcome**: {outcome}",
+        f"- **Repair attempted**: {'yes' if report.repair_attempted else 'no'}",
+        f"- **Attempt count**: {report.attempt_count}",
     ]
+
+    if report.repair_trigger:
+        sections.extend(["", f"- **Repair trigger**: {report.repair_trigger}"])
 
     if report.failure_reason:
         sections.extend(["", f"- **Failure reason**: {report.failure_reason}"])
@@ -74,7 +195,11 @@ def render_run_report_markdown(report: RunReport, state: PipelineState) -> str:
     sections.extend(
         [
             "",
-            "## Deterministic gate results",
+            "## Attempt summary",
+            "",
+            *(attempt_rows if report.attempts else ["- none"]),
+            "",
+            "## Deterministic gate results (final attempt)",
             "",
             *(gate_lines or ["- none"]),
             "",
@@ -87,7 +212,8 @@ def render_run_report_markdown(report: RunReport, state: PipelineState) -> str:
             f"- Prompt tokens: {report.usage.prompt_tokens}",
             f"- Completion tokens: {report.usage.completion_tokens}",
             f"- Total tokens: {report.usage.total_tokens}",
-            f"- Latency (ms): {report.usage.latency_ms}",
+            f"- Provider latency (ms, summed): {report.provider_latency_ms}",
+            f"- Wall-clock duration (ms): {report.wall_clock_duration_ms}",
             "",
             "## Limitations",
             "",

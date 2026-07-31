@@ -45,6 +45,16 @@ class GateStatus(StrEnum):
     SKIPPED = "skipped"
 
 
+class GateRepairability(StrEnum):
+    REPAIRABLE = "repairable"
+    NON_REPAIRABLE = "non_repairable"
+
+
+class AttemptOutcome(StrEnum):
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
 class AcceptanceCriterion(BaseModel):
     id: str = Field(..., min_length=1, max_length=64)
     description: str = Field(..., min_length=1, max_length=500)
@@ -182,9 +192,68 @@ class ReviewReport(BaseModel):
 
 
 class GateResult(BaseModel):
+    gate_id: str = Field(..., min_length=1, max_length=100)
     gate_name: str = Field(..., min_length=1, max_length=100)
     status: GateStatus
     message: str = Field(..., min_length=1, max_length=2_000)
+    duration_ms: float = Field(..., ge=0)
+    required: bool = True
+    repairable: GateRepairability = GateRepairability.REPAIRABLE
+
+
+class RepairInstruction(BaseModel):
+    source: Literal["gate", "reviewer"] = Field(...)
+    gate_id: str | None = Field(default=None, max_length=100)
+    message: str = Field(..., min_length=1, max_length=2_000)
+    suggestion: str | None = Field(default=None, max_length=2_000)
+
+
+class RepairRequest(BaseModel):
+    """Bounded repair context passed to the implementer repair call."""
+
+    brief: SystemBrief
+    architecture: ArchitectureSpec
+    current_bundle: ArtifactBundle
+    gate_failures: list[GateResult] = Field(default_factory=list, max_length=20)
+    reviewer_findings: list[ReviewFinding] = Field(default_factory=list, max_length=100)
+    allowed_technologies: list[str] = Field(..., max_length=20)
+    permitted_paths: list[str] = Field(..., max_length=20)
+    implementation_constraints: list[str] = Field(..., max_length=20)
+    permitted_file_changes: list[str] = Field(..., max_length=MAX_GENERATED_FILES)
+    repair_instructions: list[RepairInstruction] = Field(default_factory=list, max_length=50)
+
+
+class PipelineAttempt(BaseModel):
+    attempt_number: int = Field(..., ge=1, le=2)
+    artifacts: ArtifactBundle | None = None
+    review: ReviewReport | None = None
+    gate_results: list[GateResult] = Field(default_factory=list, max_length=30)
+    usage: UsageMetrics = Field(
+        default_factory=lambda: UsageMetrics(
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            latency_ms=0.0,
+        )
+    )
+    outcome: AttemptOutcome = AttemptOutcome.FAILED
+    failure_reason: str | None = Field(default=None, max_length=2_000)
+    reviewer_status: ReviewStatus | None = None
+    started_at_ms: float = Field(default=0.0, ge=0)
+    ended_at_ms: float = Field(default=0.0, ge=0)
+    duration_ms: float = Field(default=0.0, ge=0)
+    gates_passed: bool = False
+    reviewer_approved: bool = False
+
+
+class AttemptSummary(BaseModel):
+    attempt_number: int = Field(..., ge=1, le=2)
+    outcome: AttemptOutcome
+    reviewer_status: ReviewStatus | None = None
+    gates_passed: bool
+    reviewer_approved: bool
+    failure_reason: str | None = Field(default=None, max_length=2_000)
+    usage: UsageMetrics
     duration_ms: float = Field(..., ge=0)
 
 
@@ -204,12 +273,22 @@ class UsageMetrics(BaseModel):
 class RunReport(BaseModel):
     run_id: str = Field(..., min_length=1, max_length=64)
     brief_title: str = Field(..., min_length=1, max_length=200)
-    gates: list[GateResult] = Field(default_factory=list, max_length=20)
+    gates: list[GateResult] = Field(default_factory=list, max_length=30)
     usage: UsageMetrics
     success: bool
     artifact_count: int = Field(..., ge=0)
-    stages_completed: list[str] = Field(default_factory=list, max_length=20)
+    stages_completed: list[str] = Field(default_factory=list, max_length=30)
     reviewer_status: ReviewStatus | None = None
     failure_reason: str | None = Field(default=None, max_length=2_000)
     generated_files: list[str] = Field(default_factory=list, max_length=MAX_GENERATED_FILES)
     limitations: list[str] = Field(default_factory=list, max_length=20)
+    repair_attempted: bool = False
+    attempt_count: int = Field(default=1, ge=1, le=2)
+    attempts: list[AttemptSummary] = Field(default_factory=list, max_length=2)
+    repair_trigger: str | None = Field(default=None, max_length=2_000)
+    wall_clock_duration_ms: float = Field(default=0.0, ge=0)
+    provider_latency_ms: float = Field(
+        default=0.0,
+        ge=0,
+        description="Sum of provider-reported latency across all agent calls.",
+    )

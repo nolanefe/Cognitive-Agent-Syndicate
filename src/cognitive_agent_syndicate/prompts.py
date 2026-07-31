@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import json
 
-from cognitive_agent_syndicate.schemas import ArchitectureSpec, ArtifactBundle, SystemBrief
+from cognitive_agent_syndicate.schemas import (
+    ArchitectureSpec,
+    ArtifactBundle,
+    RepairRequest,
+    SystemBrief,
+)
 
 
 def build_architect_system_instructions() -> str:
@@ -64,6 +69,47 @@ def build_implementer_user_content(
     return (
         "Implement the architecture as an ArtifactBundle.\n"
         "Generate files only under the permitted path prefixes.\n\n"
+        f"{json.dumps(payload, indent=2, sort_keys=True)}"
+    )
+
+
+def build_implementer_repair_system_instructions() -> str:
+    return (
+        "You are the Implementer agent performing a single bounded repair attempt.\n"
+        "Role: revise an ArtifactBundle to address exact deterministic gate failures "
+        "and reviewer findings.\n"
+        "Allowed information: RepairRequest fields in the user message only.\n"
+        "Expected response: a complete revised ArtifactBundle, not a patch description.\n"
+        "Constraints: preserve the original architecture contract; make corrections "
+        "traceable to specific failures; only one repair attempt is allowed.\n"
+        "Prohibitions: no unrelated redesign; no changes outside permitted paths; "
+        "no hidden assumptions; no secrets or API keys; do not execute generated code."
+    )
+
+
+def build_implementer_repair_user_content(repair_request: RepairRequest) -> str:
+    payload = {
+        "brief": repair_request.brief.model_dump(mode="json"),
+        "architecture": repair_request.architecture.model_dump(mode="json"),
+        "current_bundle": repair_request.current_bundle.model_dump(mode="json"),
+        "gate_failures": [gate.model_dump(mode="json") for gate in repair_request.gate_failures],
+        "reviewer_findings": [
+            finding.model_dump(mode="json") for finding in repair_request.reviewer_findings
+        ],
+        "allowed_technologies": repair_request.allowed_technologies,
+        "permitted_paths": repair_request.permitted_paths,
+        "implementation_constraints": repair_request.implementation_constraints,
+        "permitted_file_changes": repair_request.permitted_file_changes,
+        "repair_instructions": [
+            instruction.model_dump(mode="json")
+            for instruction in repair_request.repair_instructions
+        ],
+    }
+    return (
+        "Perform one repair attempt on the artifact bundle.\n"
+        "Address the exact gate failures and reviewer findings below.\n"
+        "Return the complete revised ArtifactBundle.\n"
+        "Only one repair attempt is allowed.\n\n"
         f"{json.dumps(payload, indent=2, sort_keys=True)}"
     )
 

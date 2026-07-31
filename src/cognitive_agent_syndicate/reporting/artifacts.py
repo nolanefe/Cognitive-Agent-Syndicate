@@ -7,16 +7,21 @@ import shutil
 import uuid
 from pathlib import Path
 
-from cognitive_agent_syndicate.orchestration.state import PipelineState
+from cognitive_agent_syndicate.orchestration.state import PipelineStage, PipelineState
 from cognitive_agent_syndicate.paths import (
     canonical_path_key,
+    find_path_hierarchy_collision,
     normalize_relative_posix_path,
     reject_symlink_artifact_root,
 )
-from cognitive_agent_syndicate.reporting.report_writer import write_run_reports
+from cognitive_agent_syndicate.reporting.report_writer import (
+    build_success_run_report_snapshot,
+    write_run_reports,
+)
 from cognitive_agent_syndicate.schemas import (
     ArchitectureSpec,
     ArtifactBundle,
+    PipelineAttempt,
     ReviewReport,
     SystemBrief,
 )
@@ -28,14 +33,10 @@ class ArtifactPersistenceError(Exception):
 
 def validate_generated_path_hierarchy(paths: list[str]) -> None:
     """Reject file/directory hierarchy collisions before persistence."""
-    normalized = sorted({normalize_relative_posix_path(path) for path in paths})
-    for index, path in enumerate(normalized):
-        prefix = f"{path}/"
-        for other in normalized[index + 1 :]:
-            if other.startswith(prefix):
-                raise ArtifactPersistenceError(
-                    f"Path hierarchy collision between {path!r} and {other!r}."
-                )
+    collision = find_path_hierarchy_collision(paths)
+    if collision is not None:
+        left, right = collision
+        raise ArtifactPersistenceError(f"Path hierarchy collision between {left!r} and {right!r}.")
 
 
 def _resolve_artifact_target(run_dir: Path, relative_path: str) -> Path:
@@ -131,6 +132,8 @@ def persist_run_artifacts(
     bundle: ArtifactBundle,
     review: ReviewReport,
     state: PipelineState,
+    successful_attempt: PipelineAttempt,
+    wall_clock_duration_ms: float,
 ) -> tuple[Path, list[str]]:
     """Persist a successful run atomically under the artifact root."""
     final_dir = artifact_root / run_id
@@ -146,7 +149,19 @@ def persist_run_artifacts(
             bundle=bundle,
             review=review,
         )
-        write_run_reports(run_dir=staging_dir, state=state, generated_files=generated_files)
+        report = build_success_run_report_snapshot(
+            state=state,
+            successful_attempt=successful_attempt,
+            generated_files=generated_files,
+            wall_clock_duration_ms=wall_clock_duration_ms,
+        )
+        write_run_reports(
+            run_dir=staging_dir,
+            state=state,
+            generated_files=generated_files,
+            report=report,
+            report_stage=PipelineStage.COMPLETED,
+        )
         _finalize_staging_directory(staging_dir=staging_dir, final_dir=final_dir)
     except Exception:
         _cleanup_staging_directory(staging_dir)

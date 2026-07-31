@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -16,8 +17,11 @@ from cognitive_agent_syndicate.reporting.artifacts import (
     persist_run_artifacts_legacy,
     validate_generated_path_hierarchy,
 )
-from cognitive_agent_syndicate.reporting.report_writer import write_run_reports
-from cognitive_agent_syndicate.schemas import GeneratedFile
+from cognitive_agent_syndicate.reporting.report_writer import (
+    build_success_run_report_snapshot,
+    write_run_reports,
+)
+from cognitive_agent_syndicate.schemas import AttemptOutcome, GeneratedFile, PipelineAttempt
 from tests.fixtures.pipeline_fixtures import (
     sample_architecture,
     sample_brief,
@@ -27,7 +31,39 @@ from tests.fixtures.pipeline_fixtures import (
 )
 
 
+def _sample_successful_attempt() -> PipelineAttempt:
+    return PipelineAttempt(
+        attempt_number=1,
+        artifacts=sample_bundle(),
+        review=sample_review_approved(),
+        gates_passed=True,
+        reviewer_approved=True,
+    )
+
+
+def _persist_kwargs(
+    *,
+    artifact_root,
+    run_id: str,
+    state: PipelineState,
+    bundle=None,
+):
+    attempt = state.attempts[0] if state.attempts else _sample_successful_attempt()
+    return {
+        "artifact_root": artifact_root,
+        "run_id": run_id,
+        "brief": sample_brief(),
+        "architecture": sample_architecture(),
+        "bundle": bundle or sample_bundle(),
+        "review": sample_review_approved(),
+        "state": state,
+        "successful_attempt": attempt,
+        "wall_clock_duration_ms": state.wall_clock_duration_ms or 1.0,
+    }
+
+
 def _sample_state(run_id: str = "persist-run", *, success: bool = True) -> PipelineState:
+    attempt = _sample_successful_attempt()
     return PipelineState(
         run_id=run_id,
         brief=sample_brief(),
@@ -43,6 +79,7 @@ def _sample_state(run_id: str = "persist-run", *, success: bool = True) -> Pipel
             PipelineStage.REVIEWER,
             PipelineStage.GATES,
         ],
+        attempts=[attempt],
     )
 
 
@@ -50,13 +87,7 @@ def test_persistence_writes_expected_files(tmp_path) -> None:
     artifact_root = tmp_path / "artifacts"
     state = _sample_state("run-001")
     run_dir, files = persist_run_artifacts(
-        artifact_root=artifact_root,
-        run_id="run-001",
-        brief=sample_brief(),
-        architecture=sample_architecture(),
-        bundle=sample_bundle(),
-        review=sample_review_approved(),
-        state=state,
+        **_persist_kwargs(artifact_root=artifact_root, run_id="run-001", state=state)
     )
 
     assert run_dir == artifact_root / "run-001"
@@ -73,13 +104,7 @@ def test_nested_safe_paths_persist_correctly(tmp_path) -> None:
     artifact_root = tmp_path / "artifacts"
     state = _sample_state("nested-run")
     run_dir, _files = persist_run_artifacts(
-        artifact_root=artifact_root,
-        run_id="nested-run",
-        brief=sample_brief(),
-        architecture=sample_architecture(),
-        bundle=sample_bundle(),
-        review=sample_review_approved(),
-        state=state,
+        **_persist_kwargs(artifact_root=artifact_root, run_id="nested-run", state=state)
     )
 
     nested = run_dir / "artifacts" / "src" / "demo" / "service.py"
@@ -110,13 +135,7 @@ def test_existing_final_directory_is_not_overwritten(tmp_path) -> None:
 
     with pytest.raises(ArtifactPersistenceError, match="already exists"):
         persist_run_artifacts(
-            artifact_root=artifact_root,
-            run_id="existing-run",
-            brief=sample_brief(),
-            architecture=sample_architecture(),
-            bundle=sample_bundle(),
-            review=sample_review_approved(),
-            state=state,
+            **_persist_kwargs(artifact_root=artifact_root, run_id="existing-run", state=state)
         )
 
 
@@ -135,13 +154,7 @@ def test_forced_failure_leaves_no_partial_final_run(tmp_path) -> None:
     ):
         with pytest.raises(RuntimeError, match="simulated write failure"):
             persist_run_artifacts(
-                artifact_root=artifact_root,
-                run_id="partial-run",
-                brief=sample_brief(),
-                architecture=sample_architecture(),
-                bundle=sample_bundle(),
-                review=sample_review_approved(),
-                state=state,
+                **_persist_kwargs(artifact_root=artifact_root, run_id="partial-run", state=state)
             )
 
     assert not (artifact_root / "partial-run").exists()
@@ -159,13 +172,7 @@ def test_staging_directory_is_cleaned_on_failure(tmp_path) -> None:
     ):
         with pytest.raises(ArtifactPersistenceError, match="simulated content failure"):
             persist_run_artifacts(
-                artifact_root=artifact_root,
-                run_id="cleanup-run",
-                brief=sample_brief(),
-                architecture=sample_architecture(),
-                bundle=sample_bundle(),
-                review=sample_review_approved(),
-                state=state,
+                **_persist_kwargs(artifact_root=artifact_root, run_id="cleanup-run", state=state)
             )
 
     assert list(artifact_root.glob(".staging-*")) == []
@@ -239,6 +246,31 @@ def test_legacy_persistence_refuses_overwrite(tmp_path) -> None:
         write_run_reports(run_dir=run_dir, state=state, generated_files=files)
 
 
+def test_case_insensitive_hierarchy_collision_is_rejected(tmp_path) -> None:
+    from cognitive_agent_syndicate.schemas import ArtifactBundle
+
+    artifact_root = tmp_path / "artifacts"
+    bundle = ArtifactBundle(
+        files=[
+            GeneratedFile(path="SRC", content="not a directory\n"),
+            GeneratedFile(path="src/service.py", content="def run() -> None:\n    pass\n"),
+        ]
+    )
+    state = _sample_state("case-collision-run")
+
+    with pytest.raises(ArtifactPersistenceError, match="hierarchy collision"):
+        persist_run_artifacts(
+            **_persist_kwargs(
+                artifact_root=artifact_root,
+                run_id="case-collision-run",
+                state=state,
+                bundle=bundle,
+            )
+        )
+
+    assert not (artifact_root / "case-collision-run").exists()
+
+
 def test_hierarchy_collision_in_bundle_is_rejected(tmp_path) -> None:
     from cognitive_agent_syndicate.schemas import ArtifactBundle
 
@@ -253,13 +285,103 @@ def test_hierarchy_collision_in_bundle_is_rejected(tmp_path) -> None:
 
     with pytest.raises(ArtifactPersistenceError, match="hierarchy collision"):
         persist_run_artifacts(
-            artifact_root=artifact_root,
-            run_id="collision-run",
-            brief=sample_brief(),
-            architecture=sample_architecture(),
-            bundle=bundle,
-            review=sample_review_approved(),
-            state=state,
+            **_persist_kwargs(
+                artifact_root=artifact_root,
+                run_id="collision-run",
+                state=state,
+                bundle=bundle,
+            )
         )
 
     assert not (artifact_root / "collision-run").exists()
+
+
+def _patch_path_write_text_to_fail_on(filename: str):
+    original = Path.write_text
+
+    def selective_write_text(self, data, *args, **kwargs):
+        if self.name == filename:
+            raise OSError(f"simulated {filename} write failure")
+        return original(self, data, *args, **kwargs)
+
+    return patch.object(Path, "write_text", selective_write_text)
+
+
+def test_json_report_write_failure_leaves_no_success_directory(tmp_path) -> None:
+    artifact_root = tmp_path / "artifacts"
+    state = _sample_state("json-fail-run")
+
+    with _patch_path_write_text_to_fail_on("run-report.json"):
+        with pytest.raises(OSError, match="run-report.json"):
+            persist_run_artifacts(
+                **_persist_kwargs(artifact_root=artifact_root, run_id="json-fail-run", state=state)
+            )
+
+    assert not (artifact_root / "json-fail-run").exists()
+    assert list(artifact_root.glob(".staging-*")) == []
+
+
+def test_markdown_report_write_failure_leaves_no_success_directory(tmp_path) -> None:
+    artifact_root = tmp_path / "artifacts"
+    state = _sample_state("md-fail-run")
+
+    with _patch_path_write_text_to_fail_on("run-report.md"):
+        with pytest.raises(OSError, match="run-report.md"):
+            persist_run_artifacts(
+                **_persist_kwargs(artifact_root=artifact_root, run_id="md-fail-run", state=state)
+            )
+
+    assert not (artifact_root / "md-fail-run").exists()
+    assert list(artifact_root.glob(".staging-*")) == []
+
+
+def test_successful_persist_atomically_contains_reports_and_artifacts(tmp_path) -> None:
+    artifact_root = tmp_path / "artifacts"
+    state = _sample_state("atomic-run")
+    run_dir, files = persist_run_artifacts(
+        **_persist_kwargs(artifact_root=artifact_root, run_id="atomic-run", state=state)
+    )
+
+    assert (run_dir / "brief.json").exists()
+    assert (run_dir / "architecture.json").exists()
+    assert (run_dir / "review.json").exists()
+    assert (run_dir / "run-report.json").exists()
+    assert (run_dir / "run-report.md").exists()
+    assert (run_dir / "artifacts" / "pyproject.toml").exists()
+    assert len(files) == 4
+
+
+def test_success_report_manifest_matches_artifacts_directory(tmp_path) -> None:
+    artifact_root = tmp_path / "artifacts"
+    state = _sample_state("manifest-run")
+    run_dir, _files = persist_run_artifacts(
+        **_persist_kwargs(artifact_root=artifact_root, run_id="manifest-run", state=state)
+    )
+
+    payload = json.loads((run_dir / "run-report.json").read_text(encoding="utf-8"))
+    assert payload["success"] is True
+    artifact_paths = sorted(
+        str(path.relative_to(run_dir / "artifacts")).replace("\\", "/")
+        for path in (run_dir / "artifacts").rglob("*")
+        if path.is_file()
+    )
+    assert payload["generated_files"] == artifact_paths
+
+
+def test_success_report_snapshot_marks_final_attempt_success_without_state_mutation() -> None:
+    state = _sample_state("snapshot-run")
+    state.success = False
+    attempt = state.attempts[0]
+    attempt.outcome = AttemptOutcome.FAILED
+
+    report = build_success_run_report_snapshot(
+        state=state,
+        successful_attempt=attempt,
+        generated_files=["pyproject.toml"],
+        wall_clock_duration_ms=12.5,
+    )
+
+    assert state.success is False
+    assert attempt.outcome.value == "failed"
+    assert report.success is True
+    assert report.attempts[0].outcome.value == "success"

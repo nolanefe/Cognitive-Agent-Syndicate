@@ -26,6 +26,22 @@ class MockResponseNotConfiguredError(LookupError):
         )
 
 
+class MockResponseSequenceExhaustedError(LookupError):
+    """Raised when a configured mock response sequence has no remaining entries."""
+
+    def __init__(
+        self,
+        response_type: type[BaseModel],
+        user_content: str,
+    ) -> None:
+        self.response_type = response_type
+        self.user_content = user_content
+        super().__init__(
+            f"Mock response sequence exhausted for {response_type.__name__!r} "
+            f"with user content: {user_content!r}"
+        )
+
+
 @dataclass
 class RecordedCall:
     system_instructions: str
@@ -46,6 +62,7 @@ class MockModelProvider:
         )
     )
     _responses: dict[tuple[type[BaseModel], str | None], BaseModel] = field(default_factory=dict)
+    _response_sequences: dict[type[BaseModel], list[BaseModel]] = field(default_factory=dict)
     calls: list[RecordedCall] = field(default_factory=list)
 
     def configure_response(
@@ -63,6 +80,15 @@ class MockModelProvider:
             )
         copied = response_type.model_validate(response.model_dump())
         self._responses[(response_type, user_content)] = copied
+
+    def configure_response_sequence(
+        self,
+        response_type: type[BaseModel],
+        responses: list[BaseModel],
+    ) -> None:
+        """Register ordered responses returned on successive generate calls."""
+        validated = [response_type.model_validate(item.model_dump()) for item in responses]
+        self._response_sequences[response_type] = validated
 
     async def generate(
         self,
@@ -89,6 +115,13 @@ class MockModelProvider:
         response_type: type[BaseModel],
         user_content: str,
     ) -> BaseModel:
+        if response_type in self._response_sequences:
+            sequence = self._response_sequences[response_type]
+            if not sequence:
+                raise MockResponseSequenceExhaustedError(response_type, user_content)
+            next_response = sequence.pop(0)
+            return response_type.model_validate(next_response.model_dump())
+
         exact_key = (response_type, user_content)
         if exact_key in self._responses:
             stored = self._responses[exact_key]

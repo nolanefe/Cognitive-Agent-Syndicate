@@ -8,8 +8,10 @@ from cognitive_agent_syndicate.agents.reviewer import ReviewerAgent
 from cognitive_agent_syndicate.providers.mock import (
     MockModelProvider,
     MockResponseNotConfiguredError,
+    MockResponseSequenceExhaustedError,
 )
 from cognitive_agent_syndicate.schemas import ArchitectureSpec, ArtifactBundle, ReviewReport
+from cognitive_agent_syndicate.validation.repair import build_repair_request
 from tests.fixtures.pipeline_fixtures import (
     sample_architecture,
     sample_brief,
@@ -52,6 +54,30 @@ async def test_implementer_agent_requests_artifact_bundle() -> None:
 
 
 @pytest.mark.asyncio
+async def test_implementer_repair_requests_artifact_bundle() -> None:
+    provider = MockModelProvider(usage=sample_usage(prompt=20, completion=10))
+    provider.configure_response(ArtifactBundle, sample_bundle())
+    agent = ImplementerAgent(provider)
+    rejected = sample_review_approved().model_copy(update={"status": "rejected"})
+    repair_request = build_repair_request(
+        brief=sample_brief(),
+        architecture=sample_architecture(),
+        current_bundle=sample_bundle(),
+        gate_results=[],
+        review=rejected,
+        allowed_technologies=["python"],
+        permitted_paths=["src"],
+        implementation_constraints=["safe"],
+    )
+
+    result = await agent.repair(repair_request)
+
+    assert isinstance(result.response, ArtifactBundle)
+    assert provider.calls[0].response_type is ArtifactBundle
+    assert "repair attempt" in provider.calls[0].system_instructions.lower()
+
+
+@pytest.mark.asyncio
 async def test_reviewer_agent_requests_review_report() -> None:
     provider = MockModelProvider(usage=sample_usage(prompt=8, completion=2))
     provider.configure_response(ReviewReport, sample_review_approved())
@@ -75,6 +101,26 @@ async def test_agent_provider_errors_propagate() -> None:
 
     with pytest.raises(MockResponseNotConfiguredError):
         await agent.run(sample_brief())
+
+
+@pytest.mark.asyncio
+async def test_mock_sequence_exhaustion_raises_clear_error() -> None:
+    provider = MockModelProvider()
+    provider.configure_response_sequence(ArchitectureSpec, [sample_architecture()])
+
+    result = await provider.generate(
+        system_instructions="test",
+        user_content="first",
+        response_type=ArchitectureSpec,
+    )
+    assert isinstance(result.response, ArchitectureSpec)
+
+    with pytest.raises(MockResponseSequenceExhaustedError):
+        await provider.generate(
+            system_instructions="test",
+            user_content="second",
+            response_type=ArchitectureSpec,
+        )
 
 
 @pytest.mark.asyncio

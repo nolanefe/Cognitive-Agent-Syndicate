@@ -16,7 +16,12 @@ from cognitive_agent_syndicate.agents.architect import ArchitectAgent
 from cognitive_agent_syndicate.agents.implementer import ImplementerAgent
 from cognitive_agent_syndicate.agents.reviewer import ReviewerAgent
 from cognitive_agent_syndicate.config import build_settings
-from cognitive_agent_syndicate.demo import create_demo_provider, is_url_shortener_demo_brief
+from cognitive_agent_syndicate.demo import (
+    MockScenario,
+    create_demo_provider,
+    is_url_shortener_demo_brief,
+    parse_mock_scenario,
+)
 from cognitive_agent_syndicate.orchestration.pipeline import ContractDrivenPipeline
 from cognitive_agent_syndicate.orchestration.state import PipelineState
 from cognitive_agent_syndicate.schemas import SystemBrief
@@ -43,10 +48,22 @@ def run_pipeline(
         "--mock",
         help="Run with built-in deterministic mock responses (no API key required).",
     ),
+    mock_scenario: str = typer.Option(
+        MockScenario.SUCCESS.value,
+        "--mock-scenario",
+        help="Deterministic mock scenario: success, repair-success, or repair-failure.",
+    ),
+    max_repair_attempts: int | None = typer.Option(
+        None,
+        "--max-repair-attempts",
+        min=0,
+        max=1,
+        help="Override max repair attempts for this invocation (0 or 1).",
+    ),
 ) -> None:
     """Run the contract-driven architect → implementer → reviewer pipeline."""
     if not mock:
-        console.print("[red]Stage 2 supports explicit --mock mode only.[/red]")
+        console.print("[red]Stage 3 supports explicit --mock mode only.[/red]")
         raise typer.Exit(code=1)
 
     try:
@@ -55,16 +72,30 @@ def run_pipeline(
         console.print(f"[red]Invalid brief file:[/red] {exc}")
         raise typer.Exit(code=1) from exc
 
-    if artifact_dir is not None:
-        settings = build_settings(provider="mock", artifact_output_dir=artifact_dir)
+    try:
+        scenario = parse_mock_scenario(mock_scenario)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    if max_repair_attempts is None:
+        repair_attempts = 1
     else:
-        settings = build_settings(provider="mock")
+        repair_attempts = max_repair_attempts
+
+    overrides: dict[str, object] = {
+        "provider": "mock",
+        "max_repair_attempts": repair_attempts,
+    }
+    if artifact_dir is not None:
+        overrides["artifact_output_dir"] = artifact_dir
+    settings = build_settings(**overrides)
 
     if not is_url_shortener_demo_brief(brief):
         console.print("[red]Mock mode currently supports the URL Shortener demo brief only.[/red]")
         raise typer.Exit(code=1)
 
-    provider = create_demo_provider()
+    provider = create_demo_provider(scenario=scenario)
     pipeline = ContractDrivenPipeline(
         architect=ArchitectAgent(provider),
         implementer=ImplementerAgent(provider),
@@ -100,6 +131,8 @@ def run_pipeline(
 
     if state.success:
         console.print("[green]Pipeline succeeded.[/green]")
+        if state.repair_attempted:
+            console.print("[green]Repair attempt succeeded.[/green]")
         if state.artifact_directory:
             console.print(f"Artifacts written to: {state.artifact_directory}")
         raise typer.Exit(code=0)
@@ -107,6 +140,8 @@ def run_pipeline(
     console.print("[red]Pipeline failed.[/red]")
     if state.failure_reason:
         console.print(f"Reason: {state.failure_reason}")
+    if state.artifact_directory:
+        console.print(f"Failure report written to: {state.artifact_directory}")
     raise typer.Exit(code=1)
 
 

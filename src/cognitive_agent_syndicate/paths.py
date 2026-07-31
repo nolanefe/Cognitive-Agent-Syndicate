@@ -51,6 +51,22 @@ def canonical_path_key(path: str) -> str:
     return normalize_relative_posix_path(path).casefold()
 
 
+def find_path_hierarchy_collision(paths: list[str]) -> tuple[str, str] | None:
+    """Return the first colliding path pair using canonical case-folding keys."""
+    if len(paths) < 2:
+        return None
+
+    keyed = sorted(
+        (canonical_path_key(path), normalize_relative_posix_path(path)) for path in paths
+    )
+    for index, (key, display_path) in enumerate(keyed):
+        prefix = f"{key}/"
+        for other_key, other_display in keyed[index + 1 :]:
+            if other_key.startswith(prefix):
+                return display_path, other_display
+    return None
+
+
 class SymlinkArtifactRootError(ValueError):
     """Raised when an artifact output path crosses a symlink."""
 

@@ -42,8 +42,12 @@ def _build_pipeline(
     artifact_output_dir: str,
     *,
     run_id_factory=None,
+    max_repair_attempts: int = 0,
 ) -> ContractDrivenPipeline:
-    settings = build_settings(artifact_output_dir=artifact_output_dir)
+    settings = build_settings(
+        artifact_output_dir=artifact_output_dir,
+        max_repair_attempts=max_repair_attempts,
+    )
     return ContractDrivenPipeline(
         architect=ArchitectAgent(provider),
         implementer=ImplementerAgent(provider),
@@ -278,7 +282,6 @@ async def test_pipeline_does_not_execute_generated_code(artifact_workspace, monk
 
     blocked: list[str] = []
     original_import = builtins.__import__
-    original_compile = builtins.compile
     original_import_module = importlib.import_module
     original_subprocess_run = subprocess.run
     generated_roots = {"url_shortener"}
@@ -298,12 +301,6 @@ async def test_pipeline_does_not_execute_generated_code(artifact_workspace, monk
         if _invoked_from_pipeline():
             blocked.append("eval")
             raise AssertionError("Generated code must not be evaluated")
-
-    def fake_compile(*args, **kwargs):  # type: ignore[no-untyped-def]
-        if _invoked_from_pipeline():
-            blocked.append("compile")
-            raise AssertionError("Generated code must not be compiled for execution")
-        return original_compile(*args, **kwargs)
 
     def fake_run(*args, **kwargs):  # type: ignore[no-untyped-def]
         if _invoked_from_pipeline():
@@ -327,7 +324,6 @@ async def test_pipeline_does_not_execute_generated_code(artifact_workspace, monk
 
     monkeypatch.setattr("builtins.exec", fake_exec)
     monkeypatch.setattr("builtins.eval", fake_eval)
-    monkeypatch.setattr("builtins.compile", fake_compile)
     monkeypatch.setattr("subprocess.run", fake_run)
     monkeypatch.setattr("importlib.import_module", fake_import_module)
     monkeypatch.setattr("builtins.__import__", fake_import)

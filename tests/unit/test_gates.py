@@ -122,9 +122,13 @@ def test_gate_ordering_is_deterministic() -> None:
         "gate_file_count_within_limit",
         "gate_total_content_within_limit",
         "gate_paths_comply_with_permitted_prefixes",
+        "gate_python_syntax",
+        "gate_required_common_project_files",
+        "gate_architecture_data_model_consistency",
+        "gate_file_hierarchy_collision",
+        "gate_forbidden_generated_content",
         "gate_acceptance_criteria_represented_in_review",
         "gate_reviewer_status_consistent_with_findings",
-        "gate_required_common_project_files",
     ]
 
 
