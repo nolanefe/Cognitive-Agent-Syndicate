@@ -1,0 +1,21 @@
+{
+  "title": "URL Shortener Service",
+  "description": "Build a minimal offline-friendly URL shortener that creates short codes for valid HTTP(S) URLs and resolves them on lookup. The implementation should stay small, testable, and safe for mock pipeline runs.",
+  "acceptance_criteria": [
+    {
+      "id": "ac-create",
+      "description": "POST /links creates a short code for a valid URL.",
+      "must_pass": true
+    },
+    {
+      "id": "ac-resolve",
+      "description": "GET /{code} redirects to the original URL.",
+      "must_pass": true
+    },
+    {
+      "id": "ac-validate",
+      "description": "Invalid URLs are rejected with a clear error.",
+      "must_pass": true
+    }
+  ]
+}

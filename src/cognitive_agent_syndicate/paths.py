@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 _WINDOWS_DRIVE_PREFIX = re.compile(r"^[A-Za-z]:")
 
@@ -48,3 +49,25 @@ def normalize_relative_posix_path(path: str) -> str:
 def canonical_path_key(path: str) -> str:
     """Return a case-folded canonical key for duplicate path detection."""
     return normalize_relative_posix_path(path).casefold()
+
+
+class SymlinkArtifactRootError(ValueError):
+    """Raised when an artifact output path crosses a symlink."""
+
+
+def reject_symlink_artifact_root(relative_path: str | Path) -> None:
+    """Reject artifact roots that are symlinks or traverse symlink components.
+
+    Uses filesystem checks without resolving through untrusted symlinks.
+    """
+    path = Path(relative_path)
+    if path.is_symlink():
+        raise SymlinkArtifactRootError(f"Artifact output dir must not be a symlink: {path}")
+
+    accumulated = Path(".")
+    for part in path.parts:
+        accumulated = accumulated / part
+        if accumulated.is_symlink():
+            raise SymlinkArtifactRootError(
+                f"Artifact output dir crosses a symlink at {accumulated}"
+            )

@@ -164,6 +164,7 @@ def test_schemas_serialize_to_json() -> None:
                 category=ReviewCategory.ACCEPTANCE_CRITERION,
                 severity=ReviewSeverity.INFO,
                 message="All checks passed.",
+                passed=True,
             )
         ],
         summary="Ready for delivery.",
@@ -235,6 +236,18 @@ def test_review_finding_requires_valid_category() -> None:
                 "category": "unknown",
                 "severity": "info",
                 "message": "Invalid category should fail.",
+            }
+        )
+
+
+def test_acceptance_criterion_finding_requires_passed() -> None:
+    with pytest.raises(ValidationError):
+        ReviewFinding.model_validate(
+            {
+                "criterion_id": "ac-1",
+                "category": "acceptance_criterion",
+                "severity": "info",
+                "message": "Missing passed flag should fail.",
             }
         )
 

@@ -45,3 +45,8 @@ class Settings(BaseSettings):
     @classmethod
     def validate_artifact_output_dir(cls, value: str) -> str:
         return normalize_relative_posix_path(value)
+
+
+def build_settings(**overrides: object) -> Settings:
+    """Construct settings without loading a local .env file."""
+    return Settings(_env_file=None, **overrides)  # type: ignore[call-arg, arg-type]

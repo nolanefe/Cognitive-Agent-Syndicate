@@ -16,6 +16,9 @@ dependencies = [
     "rich",
 ]
 
+[project.scripts]
+cognitive-agent-syndicate = "cognitive_agent_syndicate.cli:app"
+
 [project.optional-dependencies]
 dev = [
     "pytest",
@@ -31,6 +34,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py311"
@@ -40,16 +44,15 @@ exclude = ["src/agent_orchestrator.py"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+"src/cognitive_agent_syndicate/cli.py" = ["B008"]
+
 [tool.mypy]
 python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
 exclude = ["src/agent_orchestrator.py", "tests"]
-
-[[tool.mypy.overrides]]
-module = "tests.*"
-disallow_untyped_defs = false
 
 [tool.coverage.run]
 source = ["src/cognitive_agent_syndicate"]

@@ -146,6 +146,13 @@ class ReviewFinding(BaseModel):
     severity: ReviewSeverity
     message: str = Field(..., min_length=1, max_length=2_000)
     suggestion: str | None = Field(default=None, max_length=2_000)
+    passed: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_passed_for_acceptance_criterion(self) -> Self:
+        if self.category == ReviewCategory.ACCEPTANCE_CRITERION and self.passed is None:
+            raise ValueError("passed must be explicitly provided for ACCEPTANCE_CRITERION findings")
+        return self
 
 
 class ReviewReport(BaseModel):
@@ -201,3 +208,8 @@ class RunReport(BaseModel):
     usage: UsageMetrics
     success: bool
     artifact_count: int = Field(..., ge=0)
+    stages_completed: list[str] = Field(default_factory=list, max_length=20)
+    reviewer_status: ReviewStatus | None = None
+    failure_reason: str | None = Field(default=None, max_length=2_000)
+    generated_files: list[str] = Field(default_factory=list, max_length=MAX_GENERATED_FILES)
+    limitations: list[str] = Field(default_factory=list, max_length=20)
