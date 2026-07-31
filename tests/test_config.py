@@ -3,13 +3,13 @@
 import pytest
 from pydantic import ValidationError
 
-from cognitive_agent_syndicate.config import Settings
+from cognitive_agent_syndicate.config import ProviderName, Settings
 
 
 def test_settings_use_safe_defaults() -> None:
     settings = Settings(_env_file=None)
 
-    assert settings.provider == "mock"
+    assert settings.provider == ProviderName.MOCK
     assert settings.model == "mock-model"
     assert settings.temperature == 0.0
     assert settings.max_output_chars == 50_000

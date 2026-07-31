@@ -15,7 +15,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from cognitive_agent_syndicate.agents.architect import ArchitectAgent
 from cognitive_agent_syndicate.agents.implementer import ImplementerAgent
 from cognitive_agent_syndicate.agents.reviewer import ReviewerAgent
-from cognitive_agent_syndicate.config import build_settings
+from cognitive_agent_syndicate.config import ProviderName, Settings, build_settings
 from cognitive_agent_syndicate.demo import (
     MockScenario,
     create_demo_provider,
@@ -24,6 +24,12 @@ from cognitive_agent_syndicate.demo import (
 )
 from cognitive_agent_syndicate.orchestration.pipeline import ContractDrivenPipeline
 from cognitive_agent_syndicate.orchestration.state import PipelineState
+from cognitive_agent_syndicate.providers.base import ModelProvider
+from cognitive_agent_syndicate.providers.errors import ProviderConfigurationError
+from cognitive_agent_syndicate.providers.factory import (
+    create_model_provider,
+    validate_provider_configuration,
+)
 from cognitive_agent_syndicate.schemas import SystemBrief
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -43,15 +49,25 @@ def run_pipeline(
         "--artifact-dir",
         help="Override the artifact output directory.",
     ),
+    provider: str = typer.Option(
+        "mock",
+        "--provider",
+        help="Model provider: mock or openai.",
+    ),
     mock: bool = typer.Option(
         False,
         "--mock",
-        help="Run with built-in deterministic mock responses (no API key required).",
+        help="Backward-compatible alias for --provider mock.",
     ),
     mock_scenario: str = typer.Option(
         MockScenario.SUCCESS.value,
         "--mock-scenario",
         help="Deterministic mock scenario: success, repair-success, or repair-failure.",
+    ),
+    model: str | None = typer.Option(
+        None,
+        "--model",
+        help="Model name (required for --provider openai).",
     ),
     max_repair_attempts: int | None = typer.Option(
         None,
@@ -62,44 +78,73 @@ def run_pipeline(
     ),
 ) -> None:
     """Run the contract-driven architect → implementer → reviewer pipeline."""
-    if not mock:
-        console.print("[red]Stage 3 supports explicit --mock mode only.[/red]")
+    provider_value = provider.strip().lower()
+    if mock and provider_value == ProviderName.OPENAI.value:
+        console.print("[red]--mock cannot be combined with --provider openai.[/red]")
+        raise typer.Exit(code=1)
+
+    try:
+        selected_provider = ProviderName.MOCK if mock else _parse_provider_name(provider_value)
+    except ProviderConfigurationError as exc:
+        _print_cli_error(_safe_cli_error(exc))
+        raise typer.Exit(code=1) from exc
+
+    if selected_provider != ProviderName.MOCK and mock_scenario != MockScenario.SUCCESS.value:
+        console.print("[red]--mock-scenario is valid only with the mock provider.[/red]")
+        raise typer.Exit(code=1)
+
+    if selected_provider == ProviderName.OPENAI and not model:
+        console.print("[red]OpenAI provider requires --model.[/red]")
         raise typer.Exit(code=1)
 
     try:
         brief = _load_brief(Path(brief_path))
     except (OSError, ValidationError, json.JSONDecodeError) as exc:
-        console.print(f"[red]Invalid brief file:[/red] {exc}")
+        _print_cli_error(f"Invalid brief file: {_safe_cli_error(exc)}")
         raise typer.Exit(code=1) from exc
 
-    try:
-        scenario = parse_mock_scenario(mock_scenario)
-    except ValueError as exc:
-        console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(code=1) from exc
+    scenario: MockScenario | None = None
+    if selected_provider == ProviderName.MOCK:
+        try:
+            scenario = parse_mock_scenario(mock_scenario)
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1) from exc
 
-    if max_repair_attempts is None:
-        repair_attempts = 1
-    else:
-        repair_attempts = max_repair_attempts
+        if not is_url_shortener_demo_brief(brief):
+            console.print(
+                "[red]Mock mode currently supports the URL Shortener demo brief only.[/red]"
+            )
+            raise typer.Exit(code=1)
+
+    repair_attempts = 1 if max_repair_attempts is None else max_repair_attempts
 
     overrides: dict[str, object] = {
-        "provider": "mock",
+        "provider": selected_provider.value,
         "max_repair_attempts": repair_attempts,
     }
     if artifact_dir is not None:
         overrides["artifact_output_dir"] = artifact_dir
-    settings = build_settings(**overrides)
+    if model is not None:
+        overrides["model"] = model.strip()
 
-    if not is_url_shortener_demo_brief(brief):
-        console.print("[red]Mock mode currently supports the URL Shortener demo brief only.[/red]")
-        raise typer.Exit(code=1)
+    try:
+        settings = build_settings(**overrides)
+        validate_provider_configuration(settings)
+    except (ValidationError, ProviderConfigurationError) as exc:
+        _print_cli_error(_safe_cli_error(exc))
+        raise typer.Exit(code=1) from exc
 
-    provider = create_demo_provider(scenario=scenario)
+    try:
+        pipeline_provider = _build_provider(selected_provider, scenario=scenario, settings=settings)
+    except ProviderConfigurationError as exc:
+        _print_cli_error(_safe_cli_error(exc))
+        raise typer.Exit(code=1) from exc
+
     pipeline = ContractDrivenPipeline(
-        architect=ArchitectAgent(provider),
-        implementer=ImplementerAgent(provider),
-        reviewer=ReviewerAgent(provider),
+        architect=ArchitectAgent(pipeline_provider),
+        implementer=ImplementerAgent(pipeline_provider),
+        reviewer=ReviewerAgent(pipeline_provider),
         settings=settings,
     )
 
@@ -111,13 +156,19 @@ def run_pipeline(
     ]
     required_project_files = ["pyproject.toml"]
 
+    progress_label = (
+        "Running mock pipeline..."
+        if selected_provider == ProviderName.MOCK
+        else "Running OpenAI pipeline..."
+    )
+
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         console=console,
         transient=True,
     ) as progress:
-        task = progress.add_task("Running mock pipeline...", total=None)
+        task = progress.add_task(progress_label, total=None)
         state: PipelineState = asyncio.run(
             pipeline.run(
                 brief,
@@ -145,9 +196,52 @@ def run_pipeline(
     raise typer.Exit(code=1)
 
 
+def _parse_provider_name(value: str) -> ProviderName:
+    try:
+        return ProviderName(value)
+    except ValueError as exc:
+        raise ProviderConfigurationError(
+            f"Invalid provider {value!r}. Expected mock or openai."
+        ) from exc
+
+
+def _build_provider(
+    selected_provider: ProviderName,
+    *,
+    scenario: MockScenario | None,
+    settings: Settings,
+) -> ModelProvider:
+    if selected_provider == ProviderName.MOCK:
+        assert scenario is not None
+        return create_demo_provider(scenario=scenario)
+    return create_model_provider(settings)
+
+
 def _load_brief(path: Path) -> SystemBrief:
     payload = json.loads(path.read_text(encoding="utf-8"))
     return SystemBrief.model_validate(payload)
+
+
+def _print_cli_error(message: str) -> None:
+    escaped = message.replace("[", "\\[")
+    console.print(f"[red]{escaped}[/red]")
+
+
+def _safe_cli_error(exc: BaseException) -> str:
+    if isinstance(exc, ValidationError):
+        first = exc.errors()[0]
+        location = ".".join(str(part) for part in first.get("loc", ()))
+        message = str(first.get("msg", "Invalid configuration."))
+        if message.startswith("Value error, "):
+            message = message.removeprefix("Value error, ")
+        message = " ".join(message.split())
+        if location:
+            return f"Invalid configuration ({location}): {message}"
+        return f"Invalid configuration: {message}"
+    if isinstance(exc, ProviderConfigurationError):
+        return " ".join(str(exc).split())
+    message = " ".join(str(exc).strip().split())
+    return message or exc.__class__.__name__
 
 
 def main() -> None:

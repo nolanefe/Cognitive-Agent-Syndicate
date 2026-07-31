@@ -119,14 +119,23 @@ def test_cli_invalid_brief_exits_non_zero(tmp_path) -> None:
     assert "Invalid brief file" in result.output
 
 
-def test_cli_without_mock_flag_exits_non_zero() -> None:
+def test_cli_default_mock_run_succeeds_without_mock_flag(tmp_path, monkeypatch) -> None:
+    artifact_dir = tmp_path / "generated"
+    artifact_dir.mkdir()
+    monkeypatch.chdir(tmp_path)
+
     result = runner.invoke(
         app,
-        ["run", str(CANONICAL_BRIEF_PATH)],
+        [
+            "run",
+            str(CANONICAL_BRIEF_PATH),
+            "--artifact-dir",
+            "generated",
+        ],
     )
 
-    assert result.exit_code != 0
-    assert "supports explicit --mock mode only" in result.output
+    assert result.exit_code == 0, result.output
+    assert "Pipeline succeeded" in result.output
 
 
 def test_module_help_invocation() -> None:
