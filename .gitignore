@@ -34,5 +34,8 @@ coverage.xml
 generated_artifacts/
 generated_infrastructure/
 
+# Benchmark results (generated locally; not committed)
+benchmark_results/
+
 # Editor and OS files
 .DS_Store

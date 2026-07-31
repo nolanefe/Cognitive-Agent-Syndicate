@@ -15,6 +15,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from cognitive_agent_syndicate.agents.architect import ArchitectAgent
 from cognitive_agent_syndicate.agents.implementer import ImplementerAgent
 from cognitive_agent_syndicate.agents.reviewer import ReviewerAgent
+from cognitive_agent_syndicate.benchmark_cli import benchmark_app
 from cognitive_agent_syndicate.config import ProviderName, Settings, build_settings
 from cognitive_agent_syndicate.demo import (
     MockScenario,
@@ -33,6 +34,7 @@ from cognitive_agent_syndicate.providers.factory import (
 from cognitive_agent_syndicate.schemas import SystemBrief
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
+app.add_typer(benchmark_app, name="benchmark")
 console = Console()
 
 

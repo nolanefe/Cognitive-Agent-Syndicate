@@ -13,6 +13,11 @@ from cognitive_agent_syndicate.agents.implementer import ImplementerAgent
 from cognitive_agent_syndicate.agents.reviewer import ReviewerAgent
 from cognitive_agent_syndicate.config import Settings
 from cognitive_agent_syndicate.orchestration.clock import MonotonicClock, default_monotonic_clock
+from cognitive_agent_syndicate.orchestration.failures import (
+    PipelineFailureCategory,
+    categorize_pipeline_exception,
+    infer_evaluable_failure_category,
+)
 from cognitive_agent_syndicate.orchestration.state import PipelineStage, PipelineState
 from cognitive_agent_syndicate.paths import SymlinkArtifactRootError, reject_symlink_artifact_root
 from cognitive_agent_syndicate.reporting.artifacts import (
@@ -88,6 +93,7 @@ class ContractDrivenPipeline:
                 clock=self._clock,
                 pipeline_start=pipeline_start,
                 failure_reason=_sanitize_failure_reason(exc),
+                failure_category=PipelineFailureCategory.PERSISTENCE_FAILED,
                 artifact_root=artifact_root,
                 run_id=run_id,
             )
@@ -189,6 +195,7 @@ class ContractDrivenPipeline:
                     clock=self._clock,
                     pipeline_start=pipeline_start,
                     failure_reason=state.failure_reason or "Initial attempt failed.",
+                    failure_category=_category_for_attempt(attempt1),
                     artifact_root=artifact_root,
                     run_id=run_id,
                 )
@@ -229,6 +236,7 @@ class ContractDrivenPipeline:
                     clock=self._clock,
                     pipeline_start=pipeline_start,
                     failure_reason=f"Repair implementer failed: {attempt2.failure_reason}",
+                    failure_category=categorize_pipeline_exception(exc),
                     artifact_root=artifact_root,
                     run_id=run_id,
                 )
@@ -253,6 +261,7 @@ class ContractDrivenPipeline:
                     clock=self._clock,
                     pipeline_start=pipeline_start,
                     failure_reason=f"Repair reviewer failed: {attempt2.failure_reason}",
+                    failure_category=categorize_pipeline_exception(exc),
                     artifact_root=artifact_root,
                     run_id=run_id,
                 )
@@ -297,6 +306,7 @@ class ContractDrivenPipeline:
                 clock=self._clock,
                 pipeline_start=pipeline_start,
                 failure_reason=attempt2.failure_reason or "Repair attempt failed.",
+                failure_category=_category_for_attempt(attempt2),
                 artifact_root=artifact_root,
                 run_id=run_id,
             )
@@ -307,6 +317,7 @@ class ContractDrivenPipeline:
                 clock=self._clock,
                 pipeline_start=pipeline_start,
                 failure_reason=_sanitize_failure_reason(exc),
+                failure_category=categorize_pipeline_exception(exc),
                 artifact_root=artifact_root,
                 run_id=run_id,
             )
@@ -407,6 +418,7 @@ def _persist_success(
             clock=clock,
             pipeline_start=pipeline_start,
             failure_reason=f"Artifact persistence failed: {_sanitize_failure_reason(exc)}",
+            failure_category=PipelineFailureCategory.PERSISTENCE_FAILED,
             artifact_root=artifact_root,
             run_id=run_id,
         )
@@ -425,6 +437,14 @@ def _persist_success(
     return state
 
 
+def _category_for_attempt(attempt: PipelineAttempt) -> PipelineFailureCategory:
+    reviewer_status = attempt.review.status if attempt.review is not None else None
+    return infer_evaluable_failure_category(
+        reviewer_status=reviewer_status,
+        gate_results=attempt.gate_results,
+    )
+
+
 def _finalize_failed_state(
     *,
     state: PipelineState,
@@ -433,10 +453,12 @@ def _finalize_failed_state(
     failure_reason: str,
     artifact_root: Path,
     run_id: str,
+    failure_category: PipelineFailureCategory | None = None,
 ) -> PipelineState:
     state.stage = PipelineStage.FAILED
     state.success = False
     state.failure_reason = failure_reason
+    state.failure_category = failure_category
     state.final_artifacts = None
     state.pipeline_ended_at_ms = clock() * 1000.0
     state.wall_clock_duration_ms = max(0.0, (clock() - pipeline_start) * 1000.0)

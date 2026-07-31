@@ -6,6 +6,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field, model_validator
 
+from cognitive_agent_syndicate.orchestration.failures import PipelineFailureCategory
 from cognitive_agent_syndicate.schemas import (
     ArchitectureSpec,
     ArtifactBundle,
@@ -49,6 +50,7 @@ class PipelineState(BaseModel):
     stage: PipelineStage = PipelineStage.INIT
     success: bool = False
     failure_reason: str | None = None
+    failure_category: PipelineFailureCategory | None = None
     artifact_directory: str | None = None
     stages_completed: list[PipelineStage] = Field(default_factory=list)
     attempts: list[PipelineAttempt] = Field(default_factory=list, max_length=2)

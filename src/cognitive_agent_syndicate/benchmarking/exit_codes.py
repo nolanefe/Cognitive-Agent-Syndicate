@@ -1,0 +1,6 @@
+"""Benchmark CLI exit codes."""
+
+EXIT_SUCCESS = 0
+EXIT_FATAL = 1
+EXIT_USAGE = 2
+EXIT_COMPLETED_WITH_FAILURES = 3

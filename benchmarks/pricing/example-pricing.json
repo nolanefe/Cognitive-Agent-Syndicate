@@ -1,0 +1,8 @@
+{
+  "model_label": "example-model",
+  "input_usd_per_million_tokens": "1.50",
+  "output_usd_per_million_tokens": "6.00",
+  "source_or_note": "Fictional example values for offline benchmark cost estimation only. Not current market rates.",
+  "effective_date": "2026-01-01",
+  "currency": "USD"
+}
