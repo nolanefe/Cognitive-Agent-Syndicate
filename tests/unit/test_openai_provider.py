@@ -32,13 +32,39 @@ from cognitive_agent_syndicate.schemas import AcceptanceCriterion, SystemBrief
 from tests.fixtures.openai_provider_fixtures import (
     FakeAsyncOpenAIClient,
     FakeResponsesResource,
+    build_input_tokens_details,
+    build_output_tokens_details,
     build_parsed_response,
+    build_response_usage,
     sample_usage,
 )
 
 
 class _TinySchema(BaseModel):
     title: str = Field(..., min_length=1)
+
+
+def test_build_response_usage_matches_installed_sdk_schema() -> None:
+    pytest.importorskip("openai")
+    from openai.types.responses.response_usage import InputTokensDetails, ResponseUsage
+
+    usage = build_response_usage(input_tokens=10, output_tokens=5, total_tokens=15)
+
+    assert isinstance(usage, ResponseUsage)
+    assert usage.input_tokens == 10
+    assert usage.output_tokens == 5
+    assert usage.total_tokens == 15
+
+    input_details = build_input_tokens_details()
+    assert isinstance(input_details, InputTokensDetails)
+    assert input_details.cached_tokens == 0
+    if "cache_write_tokens" in InputTokensDetails.model_fields:
+        assert input_details.cache_write_tokens == 0
+
+    output_details = build_output_tokens_details()
+    for name, field_info in output_details.__class__.model_fields.items():
+        if field_info.is_required():
+            assert getattr(output_details, name) == 0
 
 
 def _sample_brief() -> SystemBrief:

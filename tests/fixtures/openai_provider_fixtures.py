@@ -11,8 +11,61 @@ from openai.types.responses.parsed_response import (
     ParsedResponseOutputText,
 )
 from openai.types.responses.response_output_refusal import ResponseOutputRefusal
-from openai.types.responses.response_usage import ResponseUsage
+from openai.types.responses.response_usage import (
+    InputTokensDetails,
+    OutputTokensDetails,
+    ResponseUsage,
+)
 from pydantic import BaseModel
+
+
+def _default_token_detail_values(
+    model_cls: type[BaseModel],
+    *,
+    defaults: dict[str, int],
+) -> dict[str, int]:
+    details: dict[str, int] = {}
+    for key, value in defaults.items():
+        if key in model_cls.model_fields:
+            details[key] = value
+    for name, field_info in model_cls.model_fields.items():
+        if field_info.is_required() and name not in details:
+            details[name] = 0
+    return details
+
+
+def build_input_tokens_details(**overrides: int) -> InputTokensDetails:
+    details = _default_token_detail_values(
+        InputTokensDetails,
+        defaults={"cached_tokens": 0, "cache_write_tokens": 0},
+    )
+    details.update(overrides)
+    return InputTokensDetails.model_validate(details)
+
+
+def build_output_tokens_details(**overrides: int) -> OutputTokensDetails:
+    details = _default_token_detail_values(
+        OutputTokensDetails,
+        defaults={"reasoning_tokens": 0},
+    )
+    details.update(overrides)
+    return OutputTokensDetails.model_validate(details)
+
+
+def build_response_usage(
+    *,
+    input_tokens: int = 10,
+    output_tokens: int = 5,
+    total_tokens: int | None = None,
+) -> ResponseUsage:
+    resolved_total = total_tokens if total_tokens is not None else input_tokens + output_tokens
+    return ResponseUsage(
+        input_tokens=input_tokens,
+        input_tokens_details=build_input_tokens_details(),
+        output_tokens=output_tokens,
+        output_tokens_details=build_output_tokens_details(),
+        total_tokens=resolved_total,
+    )
 
 
 @dataclass
@@ -112,11 +165,8 @@ def sample_usage(
     output_tokens: int = 5,
     total_tokens: int | None = None,
 ) -> ResponseUsage:
-    resolved_total = total_tokens if total_tokens is not None else input_tokens + output_tokens
-    return ResponseUsage(
+    return build_response_usage(
         input_tokens=input_tokens,
-        input_tokens_details={"cached_tokens": 0},
         output_tokens=output_tokens,
-        output_tokens_details={"reasoning_tokens": 0},
-        total_tokens=resolved_total,
+        total_tokens=total_tokens,
     )
