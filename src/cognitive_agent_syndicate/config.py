@@ -88,3 +88,17 @@ class Settings(BaseSettings):
 def build_settings(**overrides: object) -> Settings:
     """Construct settings without loading a local .env file."""
     return Settings(_env_file=None, **overrides)  # type: ignore[call-arg, arg-type]
+
+
+def apply_settings_overrides(
+    base: Settings | None = None,
+    **overrides: object,
+) -> Settings:
+    """Construct settings while preserving resolved OpenAI credentials across overrides."""
+    merged: dict[str, object] = dict(overrides)
+    if "openai_api_key" not in merged and "api_key" not in merged:
+        source = base if base is not None else build_settings()
+        resolved = source.resolved_openai_api_key()
+        if resolved is not None:
+            merged["openai_api_key"] = resolved.get_secret_value()
+    return build_settings(**merged)

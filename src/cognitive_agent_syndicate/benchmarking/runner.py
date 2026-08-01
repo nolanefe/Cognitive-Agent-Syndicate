@@ -39,7 +39,7 @@ from cognitive_agent_syndicate.benchmarking.schemas import (
     TrialFailureCategory,
     TrialStatus,
 )
-from cognitive_agent_syndicate.config import Settings, build_settings
+from cognitive_agent_syndicate.config import Settings
 from cognitive_agent_syndicate.orchestration.clock import MonotonicClock, default_monotonic_clock
 from cognitive_agent_syndicate.orchestration.pipeline import ContractDrivenPipeline
 from cognitive_agent_syndicate.orchestration.state import PipelineState
@@ -276,14 +276,11 @@ async def run_contract_trial(
         f"generated_artifacts/benchmarks/{context.benchmark_id}/"
         f"{task.task_id}/{mode.value}/{repetition}"
     )
-    trial_settings = build_settings(
-        provider=settings.provider.value,
-        model=settings.model,
-        temperature=settings.temperature,
-        max_repair_attempts=max_repair,
-        max_generated_files=settings.max_generated_files,
-        max_output_chars=settings.max_output_chars,
-        artifact_output_dir=relative_artifact_dir,
+    trial_settings = settings.model_copy(
+        update={
+            "max_repair_attempts": max_repair,
+            "artifact_output_dir": relative_artifact_dir,
+        }
     )
     start = clock()
 

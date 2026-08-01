@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from unittest.mock import patch
 
+import httpx
+from openai import AuthenticationError
 from typer.testing import CliRunner
 
 from cognitive_agent_syndicate.cli import app
+from tests.fixtures.openai_provider_fixtures import FakeAsyncOpenAIClient, FakeResponsesResource
 
 runner = CliRunner()
+CORRECT_KEY = "sk-test-correct"
+WRONG_KEY = "sk-test-wrong"
 
 
 def test_benchmark_plan_succeeds_offline() -> None:
@@ -274,3 +281,78 @@ def test_fairness_same_gates_across_modes_in_plan() -> None:
     assert result.exit_code == 0
     assert "single_agent" in result.stdout
     assert "contract_with_repair" in result.stdout
+
+
+def test_openai_benchmark_provider_paths_use_resolved_openai_api_key(tmp_path) -> None:
+    captured_keys: list[str] = []
+    auth_error = AuthenticationError(
+        "auth failed",
+        response=httpx.Response(
+            status_code=401,
+            request=httpx.Request("POST", "https://api.openai.com/v1/responses"),
+        ),
+        body={},
+    )
+    fake_client = FakeAsyncOpenAIClient(
+        responses=FakeResponsesResource(response=auth_error),
+    )
+
+    def fake_create_openai_client(*, api_key: str, timeout: float) -> FakeAsyncOpenAIClient:
+        captured_keys.append(api_key)
+        return fake_client
+
+    output_dir = tmp_path / "benchmark_results"
+    env = {
+        "OPENAI_API_KEY": CORRECT_KEY,
+        "API_KEY": WRONG_KEY,
+        "RUN_LIVE_BENCHMARKS": "1",
+    }
+
+    with patch(
+        "cognitive_agent_syndicate.providers.openai_provider.create_openai_client",
+        fake_create_openai_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "benchmark",
+                "run",
+                "--dataset",
+                "benchmarks/datasets/software_delivery_v1.json",
+                "--modes",
+                "single_agent",
+                "--repetitions",
+                "1",
+                "--provider",
+                "openai",
+                "--model",
+                "gpt-test-model",
+                "--reviewer-model",
+                "gpt-reviewer-model",
+                "--confirm-live",
+                "--output-dir",
+                str(output_dir),
+                "--task-ids",
+                "task-url-shortener",
+                "--benchmark-id",
+                "cli-openai-credential-test",
+            ],
+            env=env,
+        )
+
+    assert captured_keys
+    assert all(key == CORRECT_KEY for key in captured_keys)
+    assert CORRECT_KEY not in result.output
+    assert WRONG_KEY not in result.output
+
+    config_path = output_dir / "cli-openai-credential-test" / "benchmark-config.json"
+    assert config_path.exists()
+    config_text = config_path.read_text(encoding="utf-8")
+    config = json.loads(config_text)
+    assert config["generation_provider_label"] == "openai"
+    assert config["model_label"] == "gpt-test-model"
+    assert config["reviewer_provider_label"] == "openai"
+    assert config["reviewer_model_label"] == "gpt-reviewer-model"
+    assert config["is_mock"] is False
+    assert CORRECT_KEY not in config_text
+    assert WRONG_KEY not in config_text

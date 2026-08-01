@@ -45,7 +45,7 @@ from cognitive_agent_syndicate.benchmarking.schemas import (
     BenchmarkTask,
     PricingConfig,
 )
-from cognitive_agent_syndicate.config import ProviderName, Settings, build_settings
+from cognitive_agent_syndicate.config import ProviderName, Settings, apply_settings_overrides
 from cognitive_agent_syndicate.providers.base import ModelProvider
 from cognitive_agent_syndicate.providers.errors import ProviderConfigurationError
 from cognitive_agent_syndicate.providers.factory import (
@@ -251,7 +251,8 @@ def benchmark_run(
         if is_mock:
             return create_benchmark_mock_provider(task, mode)
         if reviewer_provider or reviewer_model:
-            reviewer_settings = build_settings(
+            reviewer_settings = apply_settings_overrides(
+                settings,
                 provider=selected_reviewer_provider.value,
                 model=reviewer_model or settings.model,
             )
@@ -346,7 +347,7 @@ def _build_benchmark_settings(
         overrides["model"] = "mock-model"
     if live:
         overrides["artifact_output_dir"] = "generated_artifacts"
-    return build_settings(**overrides)
+    return apply_settings_overrides(base=None, **overrides)
 
 
 def _validate_live_benchmark(*, confirm_live: bool, model: str | None) -> None:
