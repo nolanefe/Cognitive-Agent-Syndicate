@@ -27,6 +27,11 @@ quality.
 | `failed` | The trial could not be evaluated normally because of provider, configuration, malformed output, persistence, or internal failure |
 | `cancelled` | Execution was interrupted before normal evaluation |
 
+For interrupted benchmarks, trials that never started are not fabricated as
+`cancelled` trial records. Only actually started trials appear in persisted
+trial data, so persisted `total_trials` may be below the originally planned
+count.
+
 Typed failure categories include `provider_configuration`, `provider_authentication`,
 `provider_rate_limit`, `provider_timeout`, `provider_connection`,
 `malformed_structured_output`, `reviewer_rejected`, `deterministic_gate_failed`,

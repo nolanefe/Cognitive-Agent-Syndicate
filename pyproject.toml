@@ -47,7 +47,6 @@ markers = [
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-exclude = ["src/agent_orchestrator.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -60,11 +59,10 @@ python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
-exclude = ["src/agent_orchestrator.py", "tests"]
+exclude = ["tests"]
 
 [tool.coverage.run]
 source = ["src/cognitive_agent_syndicate"]
-omit = ["src/agent_orchestrator.py"]
 
 [tool.coverage.report]
 exclude_lines = ["pragma: no cover"]

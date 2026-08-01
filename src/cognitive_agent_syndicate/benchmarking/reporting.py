@@ -26,6 +26,7 @@ from cognitive_agent_syndicate.benchmarking.schemas import (
 )
 from cognitive_agent_syndicate.orchestration.state import PipelineStage
 from cognitive_agent_syndicate.paths import normalize_relative_posix_path
+from cognitive_agent_syndicate.reporting.artifacts import write_generated_artifact_files
 from cognitive_agent_syndicate.reporting.report_writer import render_run_report_markdown
 from cognitive_agent_syndicate.schemas import RunReport
 
@@ -265,14 +266,9 @@ def write_trial_reports(
         relative = str(trial_dir / "run-report.json")
 
     if result.generated_files and result.pipeline_state is not None:
-        artifacts_dir = trial_dir / "artifacts"
-        artifacts_dir.mkdir(exist_ok=True)
         bundle = result.pipeline_state.final_artifacts or result.pipeline_state.artifacts
         if bundle is not None:
-            for generated_file in bundle.files:
-                target = artifacts_dir / generated_file.path
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(generated_file.content, encoding="utf-8")
+            write_generated_artifact_files(trial_dir, bundle)
 
     return relative
 

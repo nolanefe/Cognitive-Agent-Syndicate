@@ -39,7 +39,7 @@ def validate_generated_path_hierarchy(paths: list[str]) -> None:
         raise ArtifactPersistenceError(f"Path hierarchy collision between {left!r} and {right!r}.")
 
 
-def _resolve_artifact_target(run_dir: Path, relative_path: str) -> Path:
+def resolve_artifact_target(run_dir: Path, relative_path: str) -> Path:
     normalized = normalize_relative_posix_path(relative_path)
     artifacts_root = (run_dir / "artifacts").resolve()
     target = run_dir / "artifacts" / normalized
@@ -58,6 +58,29 @@ def _resolve_artifact_target(run_dir: Path, relative_path: str) -> Path:
         raise ArtifactPersistenceError(f"Path escape detected for {relative_path!r}.")
 
     return resolved
+
+
+def write_generated_artifact_files(run_dir: Path, bundle: ArtifactBundle) -> list[str]:
+    """Write generated files with safe path resolution under ``run_dir/artifacts``."""
+    written_paths: list[str] = []
+    seen_keys: set[str] = set()
+    validate_generated_path_hierarchy([generated_file.path for generated_file in bundle.files])
+
+    for generated_file in bundle.files:
+        key = canonical_path_key(generated_file.path)
+        if key in seen_keys:
+            raise ArtifactPersistenceError(f"Duplicate generated path: {generated_file.path!r}.")
+        seen_keys.add(key)
+
+        target = resolve_artifact_target(run_dir, generated_file.path)
+        if target.exists():
+            raise ArtifactPersistenceError(f"Refusing to overwrite existing file: {target}.")
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(generated_file.content, encoding="utf-8")
+        written_paths.append(generated_file.path)
+
+    return written_paths
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -83,25 +106,7 @@ def _write_run_contents(
     _write_json(run_dir / "architecture.json", architecture.model_dump(mode="json"))
     _write_json(run_dir / "review.json", review.model_dump(mode="json"))
 
-    written_paths: list[str] = []
-    seen_keys: set[str] = set()
-    validate_generated_path_hierarchy([generated_file.path for generated_file in bundle.files])
-
-    for generated_file in bundle.files:
-        key = canonical_path_key(generated_file.path)
-        if key in seen_keys:
-            raise ArtifactPersistenceError(f"Duplicate generated path: {generated_file.path!r}.")
-        seen_keys.add(key)
-
-        target = _resolve_artifact_target(run_dir, generated_file.path)
-        if target.exists():
-            raise ArtifactPersistenceError(f"Refusing to overwrite existing file: {target}.")
-
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(generated_file.content, encoding="utf-8")
-        written_paths.append(generated_file.path)
-
-    return written_paths
+    return write_generated_artifact_files(run_dir, bundle)
 
 
 def _create_staging_directory(artifact_root: Path) -> Path:

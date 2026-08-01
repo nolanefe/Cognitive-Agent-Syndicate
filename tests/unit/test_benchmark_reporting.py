@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -21,14 +22,19 @@ from cognitive_agent_syndicate.benchmarking.reporting import (
     render_summary_markdown,
     resolve_benchmark_output_dir,
     trial_to_csv_row,
+    write_trial_reports,
 )
-from cognitive_agent_syndicate.benchmarking.runner import execute_benchmark
+from cognitive_agent_syndicate.benchmarking.runner import TrialExecutionResult, execute_benchmark
 from cognitive_agent_syndicate.benchmarking.schemas import (
     BenchmarkMode,
     BenchmarkTrial,
     TrialStatus,
 )
 from cognitive_agent_syndicate.config import build_settings
+from cognitive_agent_syndicate.orchestration.state import PipelineState
+from cognitive_agent_syndicate.reporting.artifacts import ArtifactPersistenceError
+from cognitive_agent_syndicate.schemas import ArtifactBundle, GeneratedFile
+from tests.fixtures.pipeline_fixtures import sample_architecture, sample_brief
 
 
 class FakeClock:
@@ -210,3 +216,45 @@ async def test_jsonl_one_row_per_trial(tmp_path) -> None:
     lines = (output_path / "trials.jsonl").read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 2
     json.loads(lines[0])
+
+
+@pytest.mark.skipif(not getattr(os, "supports_symlinks", True), reason="symlinks unsupported")
+def test_write_trial_reports_rejects_symlink_escape(tmp_path) -> None:
+    trial_dir = tmp_path / "trial"
+    trial_dir.mkdir()
+    artifacts_dir = trial_dir / "artifacts"
+    artifacts_dir.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("unchanged", encoding="utf-8")
+    symlink = artifacts_dir / "linked.py"
+    symlink.symlink_to(outside)
+
+    bundle = ArtifactBundle(
+        files=[GeneratedFile(path="linked.py", content="malicious overwrite\n")]
+    )
+    state = PipelineState(
+        run_id="trial-run",
+        brief=sample_brief(),
+        architecture=sample_architecture(),
+        artifacts=bundle,
+    )
+    result = TrialExecutionResult(
+        trial=BenchmarkTrial(
+            benchmark_id="bench-symlink",
+            dataset_version="v1",
+            task_id="task-url-shortener",
+            mode=BenchmarkMode.CONTRACT_WITH_REPAIR,
+            repetition=1,
+            model_label="mock",
+            reviewer_model_label="mock",
+            status=TrialStatus.COMPLETED,
+            success=True,
+        ),
+        pipeline_state=state,
+        generated_files=["linked.py"],
+    )
+
+    with pytest.raises(ArtifactPersistenceError, match="Symlink"):
+        write_trial_reports(trial_dir=trial_dir, result=result)
+
+    assert outside.read_text(encoding="utf-8") == "unchanged"

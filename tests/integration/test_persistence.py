@@ -112,7 +112,7 @@ def test_nested_safe_paths_persist_correctly(tmp_path) -> None:
 
 
 def test_path_escape_is_rejected(tmp_path) -> None:
-    from cognitive_agent_syndicate.reporting.artifacts import _resolve_artifact_target
+    from cognitive_agent_syndicate.reporting.artifacts import resolve_artifact_target
 
     run_dir = tmp_path / "escape-run"
     run_dir.mkdir()
@@ -124,7 +124,7 @@ def test_path_escape_is_rejected(tmp_path) -> None:
     symlink.symlink_to(outside)
 
     with pytest.raises(ArtifactPersistenceError, match="Symlink"):
-        _resolve_artifact_target(run_dir, "linked.py")
+        resolve_artifact_target(run_dir, "linked.py")
 
 
 def test_existing_final_directory_is_not_overwritten(tmp_path) -> None:

@@ -102,7 +102,9 @@ CI and default pytest runs also clear `RUN_LIVE_TESTS`, `OPENAI_API_KEY`, and `A
 - Non-streaming, non-background Responses API calls only.
 - No tools, web search, code interpreter, or generated-code execution.
 - Each pipeline call is independent; no conversation state is retained remotely (`store=False`).
-- Cost estimation is not implemented in Stage 4A.
+- Cost estimation is optional. When a dated pricing configuration is supplied,
+  post-run cost is calculated from observed token usage. Pre-run monetary cost
+  is not estimated because future token usage is unknown.
 - Mock mode and CI remain fully offline.
 - Generated code is never executed by the pipeline.
 - Prompts and API keys are excluded from persisted reports.
