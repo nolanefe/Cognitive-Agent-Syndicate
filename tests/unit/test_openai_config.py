@@ -10,6 +10,11 @@ from cognitive_agent_syndicate.providers.errors import ProviderConfigurationErro
 from cognitive_agent_syndicate.providers.factory import validate_provider_configuration
 
 
+def test_build_settings_rejects_duplicate_env_file_override() -> None:
+    with pytest.raises(TypeError, match="_env_file"):
+        build_settings(_env_file=None)
+
+
 def test_mock_provider_requires_no_key() -> None:
     settings = build_settings(provider=ProviderName.MOCK.value)
 
