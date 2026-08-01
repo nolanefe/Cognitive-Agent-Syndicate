@@ -36,6 +36,27 @@ Reviewer rejection and deterministic gate failure are **completed** trials with
 `success=false`. Provider, configuration, malformed-output, persistence, and internal
 failures are **failed** trials.
 
+### Reviewer status versus failure category
+
+| Field | Meaning |
+| --- | --- |
+| `reviewer_status` | Raw reviewer outcome: `approved`, `needs_revision`, or `rejected` |
+| `failure_category=reviewer_rejected` | Any non-approved reviewer outcome (`needs_revision` or `rejected`) |
+
+The failure category name is historical shorthand for “reviewer did not approve.” It does
+not mean the raw status was necessarily `rejected`.
+
+## Token accounting
+
+| Location | Scope |
+| --- | --- |
+| `BenchmarkTrial.total_tokens` | Exact sum of all observed provider-call usage in the trial |
+| Run-report usage totals | Same as trial totals: architect + implementer + reviewer (+ repair) provider calls |
+| Run-report attempt provider-token row | Contract modes: implementer + reviewer (+ repair) only; architect tokens appear in usage totals but not attempt rows. Single-agent: baseline generation + reviewer |
+
+Attempt-row provider-token counts are therefore usually lower than usage totals in contract
+modes even when only one attempt ran.
+
 ## Rate denominators
 
 Performance rates use **non-cancelled attempted trials** as the denominator:
@@ -106,7 +127,8 @@ Per mode and per task:
 
 - Attempted, completed, failed, cancelled, and successful trial counts
 - Success rate, reviewer approval rate, gate pass rates
-- Repair attempt and success rates (contract-with-repair mode)
+- Repair attempt and success rates (contract-with-repair mode only; counts actual repair
+  runs, not mode eligibility)
 - Total observed provider calls
 - Mean, median, min, and max for tokens, provider latency, and wall-clock duration
 - Failure-category counts

@@ -45,7 +45,7 @@ from cognitive_agent_syndicate.orchestration.pipeline import ContractDrivenPipel
 from cognitive_agent_syndicate.orchestration.state import PipelineState
 from cognitive_agent_syndicate.providers.base import ModelProvider
 from cognitive_agent_syndicate.reporting.report_writer import (
-    build_run_report,
+    build_single_agent_run_report,
     build_success_run_report_snapshot,
 )
 from cognitive_agent_syndicate.schemas import (
@@ -182,6 +182,7 @@ async def run_single_agent_trial(
         return TrialExecutionResult(trial=trial)
 
     end = clock()
+    wall_clock_duration_ms = max(0.0, (end - start) * 1000.0)
     gates_passed = GateRunner.all_required_passed(gate_results)
     reviewer_approved = review.status == ReviewStatus.APPROVED
     success = gates_passed and reviewer_approved
@@ -217,7 +218,7 @@ async def run_single_agent_trial(
         completion_tokens=usage.completion_tokens,
         total_tokens=usage.total_tokens,
         provider_latency_ms=usage.latency_ms,
-        wall_clock_duration_ms=max(0.0, (end - start) * 1000.0),
+        wall_clock_duration_ms=wall_clock_duration_ms,
         estimated_cost=estimate_trial_cost(
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,
@@ -247,7 +248,17 @@ async def run_single_agent_trial(
         success=success,
     )
     generated_files = sorted(file.path for file in bundle.files)
-    report = build_run_report(state, generated_files)
+    report = build_single_agent_run_report(
+        run_id=run_id,
+        brief_title=task.brief.title,
+        gate_results=gate_results,
+        usage=usage,
+        success=success,
+        generated_files=generated_files,
+        review=review,
+        wall_clock_duration_ms=wall_clock_duration_ms,
+        gates_passed=gates_passed,
+    )
     return TrialExecutionResult(
         trial=trial,
         pipeline_state=state,

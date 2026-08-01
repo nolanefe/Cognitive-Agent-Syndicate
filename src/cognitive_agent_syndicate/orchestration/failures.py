@@ -75,7 +75,12 @@ def infer_evaluable_failure_category(
     reviewer_status: ReviewStatus | None,
     gate_results: list[GateResult],
 ) -> PipelineFailureCategory:
-    """Infer evaluable failure category from reviewer and gate outcomes."""
+    """Infer evaluable failure category from reviewer and gate outcomes.
+
+    ``REVIEWER_REJECTED`` is the benchmark/pipeline failure category for any
+    non-approved reviewer outcome. The raw ``reviewer_status`` field on trials
+    and run reports preserves ``needs_revision`` versus ``rejected`` separately.
+    """
     if reviewer_status in {ReviewStatus.REJECTED, ReviewStatus.NEEDS_REVISION}:
         return PipelineFailureCategory.REVIEWER_REJECTED
     if any(gate.status == GateStatus.FAILED and gate.required for gate in gate_results):

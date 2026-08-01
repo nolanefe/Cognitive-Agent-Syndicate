@@ -58,7 +58,7 @@ class TrialFailureCategory(StrEnum):
     PROVIDER_TIMEOUT = "provider_timeout"
     PROVIDER_CONNECTION = "provider_connection"
     MALFORMED_STRUCTURED_OUTPUT = "malformed_structured_output"
-    REVIEWER_REJECTED = "reviewer_rejected"
+    REVIEWER_REJECTED = "reviewer_rejected"  # any non-approved reviewer outcome
     DETERMINISTIC_GATE_FAILED = "deterministic_gate_failed"
     PERSISTENCE_FAILED = "persistence_failed"
     INTERNAL_ERROR = "internal_error"

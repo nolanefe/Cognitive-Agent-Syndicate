@@ -123,8 +123,8 @@ def trial_to_csv_row(trial: BenchmarkTrial) -> dict[str, object]:
 def render_summary_markdown(summary: BenchmarkSummary) -> str:
     """Render benchmark summary as Markdown."""
     mode_header = (
-        "| Mode | Attempted | Success | Success rate | Repair attempts | "
-        "Repair success rate | Observed calls |"
+        "| Mode | Attempted | Success | Success rate | Repair attempts (actual) | "
+        "Repair successes (actual) | Observed calls |"
     )
     mode_sep = "| --- | --- | --- | --- | --- | --- | --- |"
     mode_rows = [mode_header, mode_sep]
@@ -216,6 +216,12 @@ def render_summary_markdown(summary: BenchmarkSummary) -> str:
         "- All modes share the same task definitions, reviewer policy, gates, and model settings.",
         "- Single-agent baseline uses one generation call plus review.",
         "- Contract modes use architect, implementer, and reviewer stages.",
+        "- Benchmark trial total_tokens is the exact sum of all observed provider-call usage.",
+        "- Run-report attempt provider-token rows exclude architect tokens in contract modes; "
+        "see each trial run report for scope notes.",
+        "- failure_category reviewer_rejected covers any non-approved reviewer outcome; "
+        "reviewer_status preserves needs_revision versus rejected.",
+        "- contract_with_repair success without repair_attempted=true is not a repair success.",
         "- Generated code is never executed during benchmark runs.",
         "",
         "## Limitations",

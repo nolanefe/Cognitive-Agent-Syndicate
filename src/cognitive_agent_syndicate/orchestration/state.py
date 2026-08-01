@@ -20,6 +20,7 @@ from cognitive_agent_syndicate.schemas import (
 
 class PipelineStage(StrEnum):
     INIT = "init"
+    SINGLE_AGENT_GENERATION = "single_agent_generation"
     ARCHITECT = "architect"
     IMPLEMENTER = "implementer"
     REVIEWER = "reviewer"

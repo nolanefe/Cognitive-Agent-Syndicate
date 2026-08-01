@@ -150,6 +150,13 @@ def build_benchmark_summary(
         "Gate evaluation is deterministic and does not run tests or scripts.",
         RATE_ROUNDING_NOTE,
     ]
+    if BenchmarkMode.CONTRACT_WITH_REPAIR in modes:
+        limitations.append(
+            "contract_with_repair permits one bounded repair attempt. "
+            "repair_attempted counts trials where repair actually ran; "
+            "success with repair_attempted=false means the initial attempt succeeded "
+            "and does not demonstrate repair effectiveness."
+        )
     if same_model_reviewer:
         limitations.append(
             "Generation and review used the same provider/model, which may reduce "

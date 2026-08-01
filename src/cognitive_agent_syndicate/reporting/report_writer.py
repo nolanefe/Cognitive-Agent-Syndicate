@@ -9,8 +9,12 @@ from cognitive_agent_syndicate.orchestration.state import PipelineStage, Pipelin
 from cognitive_agent_syndicate.schemas import (
     AttemptOutcome,
     AttemptSummary,
+    GateResult,
     PipelineAttempt,
+    ReviewReport,
+    ReviewStatus,
     RunReport,
+    UsageMetrics,
 )
 
 REPORT_LIMITATIONS = [
@@ -65,6 +69,73 @@ def build_run_report(state: PipelineState, generated_files: list[str]) -> RunRep
         repair_trigger=state.repair_trigger,
         wall_clock_duration_ms=max(0.0, state.wall_clock_duration_ms),
         provider_latency_ms=state.usage.latency_ms,
+    )
+
+
+def _single_agent_failure_reason(*, review: ReviewReport, gates_passed: bool) -> str:
+    reasons: list[str] = []
+    if not gates_passed:
+        reasons.append("One or more deterministic gates failed.")
+    if review.status != ReviewStatus.APPROVED:
+        reasons.append(f"Reviewer status is {review.status.value}, not approved.")
+    return " ".join(reasons) if reasons else "Trial did not meet success criteria."
+
+
+def build_single_agent_run_report(
+    *,
+    run_id: str,
+    brief_title: str,
+    gate_results: list[GateResult],
+    usage: UsageMetrics,
+    success: bool,
+    generated_files: list[str],
+    review: ReviewReport,
+    wall_clock_duration_ms: float,
+    gates_passed: bool,
+) -> RunReport:
+    """Build a run report for the single-agent benchmark baseline."""
+    reviewer_approved = review.status == ReviewStatus.APPROVED
+    resolved_wall_clock = max(0.0, wall_clock_duration_ms)
+    failure_reason = (
+        None
+        if success
+        else _single_agent_failure_reason(
+            review=review,
+            gates_passed=gates_passed,
+        )
+    )
+    attempt = AttemptSummary(
+        attempt_number=1,
+        outcome=AttemptOutcome.SUCCESS if success else AttemptOutcome.FAILED,
+        reviewer_status=review.status,
+        gates_passed=gates_passed,
+        reviewer_approved=reviewer_approved,
+        failure_reason=failure_reason,
+        usage=usage,
+        duration_ms=resolved_wall_clock,
+    )
+    return RunReport(
+        run_id=run_id,
+        brief_title=brief_title,
+        gates=gate_results,
+        usage=usage,
+        success=success,
+        artifact_count=len(generated_files),
+        stages_completed=[
+            PipelineStage.SINGLE_AGENT_GENERATION.value,
+            PipelineStage.REVIEWER.value,
+            PipelineStage.GATES.value,
+            PipelineStage.COMPLETED.value,
+        ],
+        reviewer_status=review.status,
+        failure_reason=failure_reason,
+        generated_files=sorted(generated_files),
+        limitations=list(REPORT_LIMITATIONS),
+        repair_attempted=False,
+        attempt_count=1,
+        attempts=[attempt],
+        wall_clock_duration_ms=resolved_wall_clock,
+        provider_latency_ms=usage.latency_ms,
     )
 
 
@@ -162,7 +233,7 @@ def render_run_report_markdown(report: RunReport, *, current_stage: PipelineStag
     outcome = "success" if report.success else "failure"
 
     attempt_rows = [
-        "| Attempt | Outcome | Reviewer | Gates | Duration (ms) | Tokens |",
+        "| Attempt | Outcome | Reviewer | Gates | Duration (ms) | Provider tokens |",
         "| --- | --- | --- | --- | --- | --- |",
     ]
     for attempt in report.attempts:
@@ -172,6 +243,19 @@ def render_run_report_markdown(report: RunReport, *, current_stage: PipelineStag
             f"| {attempt.attempt_number} | {attempt.outcome.value} | {reviewer} | "
             f"{gates} | {attempt.duration_ms:.1f} | {attempt.usage.total_tokens} |"
         )
+
+    is_single_agent_baseline = (
+        PipelineStage.SINGLE_AGENT_GENERATION.value in report.stages_completed
+    )
+    attempt_scope_note = (
+        "Single-agent attempt provider tokens include the baseline generation and reviewer calls."
+        if is_single_agent_baseline
+        else (
+            "Contract attempt provider tokens include implementer, reviewer, and repair provider "
+            "calls for that attempt only. Architecture generation tokens are included in usage "
+            "totals but excluded from attempt rows."
+        )
+    )
 
     sections = [
         "# Pipeline Run Report",
@@ -199,6 +283,8 @@ def render_run_report_markdown(report: RunReport, *, current_stage: PipelineStag
             "",
             *(attempt_rows if report.attempts else ["- none"]),
             "",
+            f"> {attempt_scope_note}" if report.attempts else "",
+            "",
             "## Deterministic gate results (final attempt)",
             "",
             *(gate_lines or ["- none"]),
@@ -212,8 +298,11 @@ def render_run_report_markdown(report: RunReport, *, current_stage: PipelineStag
             f"- Prompt tokens: {report.usage.prompt_tokens}",
             f"- Completion tokens: {report.usage.completion_tokens}",
             f"- Total tokens: {report.usage.total_tokens}",
-            f"- Provider latency (ms, summed): {report.provider_latency_ms}",
-            f"- Wall-clock duration (ms): {report.wall_clock_duration_ms}",
+            (
+                "- Provider latency (ms, summed across all provider calls): "
+                f"{report.provider_latency_ms}"
+            ),
+            f"- Wall-clock duration (ms, end-to-end trial): {report.wall_clock_duration_ms}",
             "",
             "## Limitations",
             "",
