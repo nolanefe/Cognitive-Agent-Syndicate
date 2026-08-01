@@ -12,11 +12,26 @@ _SENSITIVE_ENV_VARS = (
     "OPENAI_LIVE_MODEL",
 )
 
+_LIVE_TEST_PRESERVED_ENV_VARS = frozenset(
+    {
+        "OPENAI_API_KEY",
+        "API_KEY",
+        "RUN_LIVE_TESTS",
+        "OPENAI_LIVE_MODEL",
+    }
+)
+
 
 @pytest.fixture(autouse=True)
-def _sanitize_provider_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+def _sanitize_provider_environment(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Ensure normal tests never inherit live-provider secrets from the shell."""
+    is_live_test = request.node.get_closest_marker("live") is not None
     for variable in _SENSITIVE_ENV_VARS:
+        if is_live_test and variable in _LIVE_TEST_PRESERVED_ENV_VARS:
+            continue
         monkeypatch.delenv(variable, raising=False)
 
 
