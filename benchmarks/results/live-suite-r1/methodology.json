@@ -1,0 +1,58 @@
+{
+  "benchmark_type": "exploratory_live_benchmark",
+  "statistical_significance": false,
+  "run_date": "2026-08-01",
+  "benchmark_id": "live-suite-r1-20260801-142257",
+  "dataset": {
+    "name": "software_delivery",
+    "version": "v1",
+    "label": "software_delivery v1",
+    "task_count": 6,
+    "task_ids": [
+      "task-url-shortener",
+      "task-support-ticket",
+      "task-document-ingestion",
+      "task-feature-flag",
+      "task-inventory-reservation",
+      "task-incident-summary"
+    ]
+  },
+  "design": {
+    "modes": [
+      "single_agent",
+      "contract_no_repair",
+      "contract_with_repair"
+    ],
+    "repetitions_per_task_mode": 1,
+    "total_trials": 18,
+    "generation_provider": "openai",
+    "generation_model": "gpt-5.6-luna",
+    "reviewer_provider": "openai",
+    "reviewer_model": "gpt-5.6-luna",
+    "same_model_reviewer": true,
+    "temperature": 0.0,
+    "max_repair_attempts": 1,
+    "pricing_configured": false
+  },
+  "evaluation": {
+    "deterministic_gates": true,
+    "generated_code_executed": false,
+    "generated_code_inspection": "static_only",
+    "gate_evaluation_runs_tests_or_scripts": false
+  },
+  "framework": {
+    "package_version": "0.1.0",
+    "git_commit": "30739a0c5840d16db3c57f602b1e262ecf8e36bd",
+    "git_commit_date": "2026-08-01T14:20:51+03:00"
+  },
+  "caveats": [
+    "This run is exploratory and not statistically significant.",
+    "One repetition per task/mode provides no variance estimate.",
+    "Generation and review used the same model, which may reduce review independence.",
+    "Generated code is statically inspected but never executed.",
+    "Gate evaluation is deterministic and does not run tests or scripts.",
+    "Repair is bounded to one attempt per trial.",
+    "Pricing was not configured; cost estimates are unavailable.",
+    "Success with repair_attempted=false does not demonstrate repair effectiveness."
+  ]
+}

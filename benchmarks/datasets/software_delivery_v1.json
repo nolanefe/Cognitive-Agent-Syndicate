@@ -1,0 +1,233 @@
+{
+  "name": "software_delivery",
+  "version": "v1",
+  "description": "Six bounded software-delivery briefs for offline benchmark comparison. Tasks are illustrative and do not claim production readiness.",
+  "created_date": "2026-08-01",
+  "tasks": [
+    {
+      "task_id": "task-url-shortener",
+      "title": "URL Shortening API",
+      "tags": ["api", "crud"],
+      "brief": {
+        "title": "URL Shortening API",
+        "description": "Build a minimal URL shortening API that creates short codes for valid HTTP(S) URLs and resolves them on lookup. Keep scope small and safe for static evaluation.",
+        "acceptance_criteria": [
+          {
+            "id": "ac-create",
+            "description": "POST /links creates a short code for a valid URL.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-resolve",
+            "description": "GET /{code} resolves to the original URL.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-validate",
+            "description": "Invalid URLs are rejected with a clear error.",
+            "must_pass": true
+          }
+        ]
+      },
+      "allowed_technologies": ["python", "pydantic"],
+      "permitted_paths": ["pyproject.toml", "src", "tests"],
+      "implementation_constraints": [
+        "Keep generated files small and safe.",
+        "Do not include secrets or live network calls."
+      ],
+      "required_files": ["pyproject.toml"],
+      "difficulty": "easy",
+      "notes": "Baseline success scenario for mock harness validation."
+    },
+    {
+      "task_id": "task-support-ticket",
+      "title": "Support Ticket Classification Service",
+      "tags": ["api", "classification"],
+      "brief": {
+        "title": "Support Ticket Classification Service",
+        "description": "Build a service that accepts support ticket text and returns a category label with a confidence score. Use explicit request and response data models.",
+        "acceptance_criteria": [
+          {
+            "id": "ac-classify",
+            "description": "POST /classify returns a category for ticket text.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-models",
+            "description": "Request and response Pydantic models are defined.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-empty",
+            "description": "Empty ticket text is rejected.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-tests",
+            "description": "At least one unit test covers classification.",
+            "must_pass": true
+          }
+        ]
+      },
+      "allowed_technologies": ["python", "pydantic"],
+      "permitted_paths": ["pyproject.toml", "src", "tests"],
+      "implementation_constraints": [
+        "Use typed request/response models.",
+        "Do not call external ML APIs."
+      ],
+      "required_files": ["pyproject.toml"],
+      "difficulty": "medium",
+      "notes": "Exercises request/response data model requirements."
+    },
+    {
+      "task_id": "task-document-ingestion",
+      "title": "Document Ingestion API",
+      "tags": ["api", "ingestion"],
+      "brief": {
+        "title": "Document Ingestion API",
+        "description": "Build an API that accepts document metadata and returns a stored document identifier. Focus on validation and safe file layout.",
+        "acceptance_criteria": [
+          {
+            "id": "ac-ingest",
+            "description": "POST /documents stores metadata and returns an ID.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-validate-title",
+            "description": "Missing or blank titles are rejected.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-layout",
+            "description": "Generated files follow the permitted path prefixes.",
+            "must_pass": true
+          }
+        ]
+      },
+      "allowed_technologies": ["python", "pydantic"],
+      "permitted_paths": ["pyproject.toml", "src", "tests"],
+      "implementation_constraints": [
+        "Do not write outside permitted paths.",
+        "Keep storage in-memory."
+      ],
+      "required_files": ["pyproject.toml"],
+      "difficulty": "medium",
+      "notes": "Mock scenario exercises gate failure and repair success."
+    },
+    {
+      "task_id": "task-feature-flag",
+      "title": "Feature Flag Service",
+      "tags": ["api", "flags"],
+      "brief": {
+        "title": "Feature Flag Service",
+        "description": "Build a minimal feature flag evaluation service with a GET endpoint that returns whether a named flag is enabled.",
+        "acceptance_criteria": [
+          {
+            "id": "ac-evaluate",
+            "description": "GET /flags/{name} returns enabled state.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-unknown",
+            "description": "Unknown flag names return a safe default.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-tests",
+            "description": "Unit tests cover enabled and unknown flags.",
+            "must_pass": true
+          }
+        ]
+      },
+      "allowed_technologies": ["python", "pydantic"],
+      "permitted_paths": ["pyproject.toml", "src", "tests"],
+      "implementation_constraints": [
+        "Use in-memory flag storage.",
+        "Do not include secrets."
+      ],
+      "required_files": ["pyproject.toml"],
+      "difficulty": "easy",
+      "notes": "Mock scenario exercises reviewer rejection and repair."
+    },
+    {
+      "task_id": "task-inventory-reservation",
+      "title": "Inventory Reservation Service",
+      "tags": ["api", "inventory"],
+      "brief": {
+        "title": "Inventory Reservation Service",
+        "description": "Build a service that reserves inventory for a SKU and returns a reservation identifier. Include typed request/response models.",
+        "acceptance_criteria": [
+          {
+            "id": "ac-reserve",
+            "description": "POST /reservations creates a reservation for a SKU.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-models",
+            "description": "Reservation request and response models are defined.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-invalid-sku",
+            "description": "Invalid SKU values are rejected.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-concurrency-note",
+            "description": "Document that concurrency control is out of scope.",
+            "must_pass": true
+          }
+        ]
+      },
+      "allowed_technologies": ["python", "pydantic"],
+      "permitted_paths": ["pyproject.toml", "src", "tests"],
+      "implementation_constraints": [
+        "Keep reservation logic in-memory.",
+        "Do not execute generated code."
+      ],
+      "required_files": ["pyproject.toml"],
+      "difficulty": "medium",
+      "notes": "Mock scenario exercises repair failure."
+    },
+    {
+      "task_id": "task-incident-summary",
+      "title": "Incident Summary Service",
+      "tags": ["api", "security"],
+      "brief": {
+        "title": "Incident Summary Service",
+        "description": "Build a service that accepts a list of incident events and returns a concise summary. Static policy gates should reject unsafe generated patterns such as shell execution helpers.",
+        "acceptance_criteria": [
+          {
+            "id": "ac-summarize",
+            "description": "POST /summaries returns a text summary for event lists.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-validate-events",
+            "description": "Empty event lists are rejected.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-no-shell",
+            "description": "Generated code must not invoke shell execution helpers.",
+            "must_pass": true
+          },
+          {
+            "id": "ac-tests",
+            "description": "Unit tests cover summary generation.",
+            "must_pass": true
+          }
+        ]
+      },
+      "allowed_technologies": ["python", "pydantic"],
+      "permitted_paths": ["pyproject.toml", "src", "tests"],
+      "implementation_constraints": [
+        "Do not use os.system, subprocess, eval, or exec.",
+        "Keep summaries deterministic for tests."
+      ],
+      "required_files": ["pyproject.toml"],
+      "difficulty": "medium",
+      "notes": "Mock scenario exercises provider failure; security gate relevant for live runs."
+    }
+  ]
+}

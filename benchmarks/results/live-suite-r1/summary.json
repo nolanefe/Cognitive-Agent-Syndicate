@@ -1,0 +1,75 @@
+{
+  "evidence_schema_version": "1.0",
+  "benchmark_id": "live-suite-r1-20260801-142257",
+  "run_date": "2026-08-01",
+  "dataset_name": "software_delivery",
+  "dataset_version": "v1",
+  "dataset_label": "software_delivery v1",
+  "task_count": 6,
+  "modes": [
+    "single_agent",
+    "contract_no_repair",
+    "contract_with_repair"
+  ],
+  "repetitions": 1,
+  "provider_label": "openai",
+  "model_label": "gpt-5.6-luna",
+  "reviewer_provider_label": "openai",
+  "reviewer_model_label": "gpt-5.6-luna",
+  "same_model_reviewer": true,
+  "total_trials": 18,
+  "attempted_trials": 18,
+  "completed_trials": 18,
+  "failed_trials": 0,
+  "cancelled_trials": 0,
+  "successful_trials": 7,
+  "observed_provider_calls": 56,
+  "prompt_tokens": 119766,
+  "completion_tokens": 88333,
+  "total_tokens": 208099,
+  "wall_clock_duration_seconds": 714.7,
+  "repair_attempts": 4,
+  "repair_successes": 3,
+  "mode_summaries": [
+    {
+      "mode": "single_agent",
+      "attempted": 6,
+      "successful": 1,
+      "success_rate": 0.1667,
+      "observed_calls": 12,
+      "repair_attempts": 0,
+      "repair_successes": 0
+    },
+    {
+      "mode": "contract_no_repair",
+      "attempted": 6,
+      "successful": 1,
+      "success_rate": 0.1667,
+      "observed_calls": 18,
+      "repair_attempts": 0,
+      "repair_successes": 0
+    },
+    {
+      "mode": "contract_with_repair",
+      "attempted": 6,
+      "successful": 5,
+      "success_rate": 0.8333,
+      "observed_calls": 26,
+      "repair_attempts": 4,
+      "repair_successes": 3
+    }
+  ],
+  "failure_category_counts": {
+    "reviewer_rejected": 10,
+    "deterministic_gate_failed": 1
+  },
+  "pricing_configured": false,
+  "generated_code_executed": false,
+  "limitations": [
+    "Generated code is statically inspected but never executed during benchmark runs.",
+    "Gate evaluation is deterministic and does not run tests or scripts.",
+    "Displayed percentages use standard Python formatting to two decimal places.",
+    "contract_with_repair permits one bounded repair attempt. repair_attempted counts trials where repair actually ran; success with repair_attempted=false means the initial attempt succeeded and does not demonstrate repair effectiveness.",
+    "Generation and review used the same provider/model, which may reduce review independence."
+  ]
+}

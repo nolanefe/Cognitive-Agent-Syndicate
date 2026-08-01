@@ -1,15 +1,41 @@
-# Environment Variables
+# Environment files
 .env
-.venv
+.env.*
+!.env.example
+
+# Virtual environments
+.venv/
+.venv*/
 env/
 venv/
 
-# Python Cache
+# Python caches
 __pycache__/
-*.pyc
-.pytest_cache/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
 
-# Execution Output
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Type checking and lint caches
+.mypy_cache/
+.ruff_cache/
+
+# Generated pipeline artifacts
+generated_artifacts/
 generated_infrastructure/
 
+# Benchmark results (generated locally; not committed)
+benchmark_results/
+
+# Editor and OS files
 .DS_Store

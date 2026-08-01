@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cognitive-agent-syndicate"
+version = "0.1.0"
+description = "Contract-driven multi-agent software delivery pipeline"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2",
+    "pydantic-settings>=2",
+    "typer",
+    "rich",
+]
+
+[project.scripts]
+cognitive-agent-syndicate = "cognitive_agent_syndicate.cli:app"
+
+[project.optional-dependencies]
+openai = [
+    "openai>=2,<3",
+]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "pytest-asyncio",
+    "ruff",
+    "mypy",
+    "openai>=2,<3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-m 'not live'"
+markers = [
+    "live: manually invoked live API tests requiring explicit opt-in",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/cognitive_agent_syndicate/cli.py" = ["B008"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+exclude = ["tests"]
+
+[tool.coverage.run]
+source = ["src/cognitive_agent_syndicate"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover"]
