@@ -294,16 +294,12 @@ def benchmark_run(
         f"{summary.cancelled_trials} cancelled"
     )
     for mode_summary in summary.mode_summaries:
-        console.print(
-            f"  {mode_summary.mode.value}: "
-            f"{
-                format_success_summary(
-                    successful=mode_summary.successful_trials,
-                    attempted=mode_summary.attempted_trial_count,
-                    rate=mode_summary.success_rate,
-                )
-            }"
+        success_text = format_success_summary(
+            successful=mode_summary.successful_trials,
+            attempted=mode_summary.attempted_trial_count,
+            rate=mode_summary.success_rate,
         )
+        console.print(f"  {mode_summary.mode.value}: {success_text}")
     if is_mock:
         console.print(f"[yellow]{MOCK_BENCHMARK_DISCLAIMER}[/yellow]")
 
