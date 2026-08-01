@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 import pytest
@@ -213,9 +214,10 @@ async def test_contract_no_repair_pilot_report_shape(url_task, tmp_path) -> None
 
 @pytest.mark.asyncio
 async def test_contract_with_repair_success_without_repair_attempt(url_task, tmp_path) -> None:
+    run_id = uuid.uuid4().hex
     provider = create_benchmark_mock_provider(url_task, BenchmarkMode.CONTRACT_WITH_REPAIR)
     context = BenchmarkRunContext(
-        benchmark_id="pilot-contract-with-repair",
+        benchmark_id=f"pilot-cwr-{run_id[:8]}",
         dataset_version="v1",
         model_label="test-model",
         reviewer_model_label="test-model",
@@ -230,7 +232,7 @@ async def test_contract_with_repair_success_without_repair_attempt(url_task, tmp
         settings=build_settings(provider="mock", max_repair_attempts=1),
         trial_dir=tmp_path / "contract_with_repair",
         clock=FakeClock(),
-        run_id_factory=lambda: "pilot-contract-with-repair",
+        run_id_factory=lambda: run_id,
     )
 
     assert result.trial.success is True

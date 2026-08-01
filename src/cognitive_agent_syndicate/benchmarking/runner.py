@@ -24,10 +24,15 @@ from cognitive_agent_syndicate.benchmarking.baseline import SingleAgentBaselineA
 from cognitive_agent_syndicate.benchmarking.ids import validate_benchmark_id
 from cognitive_agent_syndicate.benchmarking.metrics import enrich_trial_gate_fields
 from cognitive_agent_syndicate.benchmarking.pricing import estimate_trial_cost
+from cognitive_agent_syndicate.benchmarking.progress import (
+    BenchmarkProgressEvent,
+    BenchmarkProgressEventType,
+    ProgressCallback,
+    wrap_provider_for_progress,
+)
 from cognitive_agent_syndicate.benchmarking.provider_instrumentation import (
     ProviderCallCounter,
     observed_provider_call_count,
-    wrap_provider_for_counting,
 )
 from cognitive_agent_syndicate.benchmarking.schemas import (
     BenchmarkDataset,
@@ -442,6 +447,7 @@ async def execute_benchmark(
     clock: MonotonicClock | None = None,
     run_id_factory: RunIdFactory | None = None,
     cancelled_check: Callable[[], bool] | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> tuple[BenchmarkRun, Path]:
     """Run a full benchmark sequentially and persist outputs."""
     from cognitive_agent_syndicate.benchmarking.metrics import build_benchmark_summary
@@ -473,12 +479,39 @@ async def execute_benchmark(
     trial_results: dict[tuple[str, BenchmarkMode, int], TrialExecutionResult] = {}
     output_root = resolve_benchmark_output_dir(output_dir, benchmark_id)
     staging_parent = output_root.parent
+    total_trials = len(tasks) * len(modes) * repetitions
+    trial_index = 0
+
+    if progress_callback is not None:
+        progress_callback(
+            BenchmarkProgressEvent(
+                event_type=BenchmarkProgressEventType.BENCHMARK_STARTED,
+                total_trials=total_trials,
+            )
+        )
 
     for task in tasks:
+        if context.cancelled:
+            break
         for mode in modes:
+            if context.cancelled:
+                break
             for repetition in range(1, repetitions + 1):
                 if cancelled_check and cancelled_check():
                     context.cancelled = True
+                    break
+                trial_index += 1
+                if progress_callback is not None:
+                    progress_callback(
+                        BenchmarkProgressEvent(
+                            event_type=BenchmarkProgressEventType.TRIAL_STARTED,
+                            trial_index=trial_index,
+                            total_trials=total_trials,
+                            task_id=task.task_id,
+                            mode=mode.value,
+                            repetition=repetition,
+                        )
+                    )
                 generation_provider = generation_provider_factory(task, mode)
                 reviewer_provider = reviewer_factory(task, mode)
                 trial_dir = (
@@ -499,9 +532,44 @@ async def execute_benchmark(
                     trial_dir=trial_dir,
                     clock=clock,
                     run_id_factory=run_id_factory,
+                    progress_callback=progress_callback,
                 )
                 trials.append(result.trial)
                 trial_results[(task.task_id, mode, repetition)] = result
+                if progress_callback is not None:
+                    if result.trial.repair_attempted:
+                        progress_callback(
+                            BenchmarkProgressEvent(
+                                event_type=BenchmarkProgressEventType.REPAIR_COMPLETED,
+                                trial_index=trial_index,
+                                total_trials=total_trials,
+                                task_id=task.task_id,
+                                mode=mode.value,
+                                repetition=repetition,
+                                repair_attempted=True,
+                            )
+                        )
+                    event_type = (
+                        BenchmarkProgressEventType.TRIAL_COMPLETED
+                        if result.trial.status != TrialStatus.FAILED
+                        else BenchmarkProgressEventType.TRIAL_FAILED
+                    )
+                    progress_callback(
+                        BenchmarkProgressEvent(
+                            event_type=event_type,
+                            trial_index=trial_index,
+                            total_trials=total_trials,
+                            task_id=task.task_id,
+                            mode=mode.value,
+                            repetition=repetition,
+                            trial_status=result.trial.status.value,
+                            failure_category=(
+                                result.trial.failure_category.value
+                                if result.trial.failure_category is not None
+                                else None
+                            ),
+                        )
+                    )
 
     task_titles = {task.task_id: task.title for task in tasks}
     summary = build_benchmark_summary(
@@ -534,6 +602,14 @@ async def execute_benchmark(
         temperature=settings.temperature,
     )
 
+    if progress_callback is not None:
+        progress_callback(
+            BenchmarkProgressEvent(
+                event_type=BenchmarkProgressEventType.BENCHMARK_PERSISTENCE_STARTED,
+                total_trials=total_trials,
+            )
+        )
+
     final_path = persist_benchmark_output(
         output_root=output_root,
         benchmark_id=benchmark_id,
@@ -561,6 +637,15 @@ async def execute_benchmark(
         trials=trials,
         summary=summary,
     )
+
+    if progress_callback is not None:
+        progress_callback(
+            BenchmarkProgressEvent(
+                event_type=BenchmarkProgressEventType.BENCHMARK_COMPLETED,
+                total_trials=total_trials,
+            )
+        )
+
     return run, final_path
 
 
@@ -576,6 +661,7 @@ async def run_benchmark_trial(
     trial_dir: Path,
     clock: MonotonicClock | None = None,
     run_id_factory: RunIdFactory | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> TrialExecutionResult:
     """Execute one benchmark trial."""
     if context.cancelled:
@@ -598,8 +684,16 @@ async def run_benchmark_trial(
 
     generation_counter = ProviderCallCounter()
     reviewer_counter = ProviderCallCounter()
-    counting_generation = wrap_provider_for_counting(generation_provider, generation_counter)
-    counting_reviewer = wrap_provider_for_counting(reviewer_provider, reviewer_counter)
+    counting_generation = wrap_provider_for_progress(
+        generation_provider,
+        generation_counter,
+        progress_callback=progress_callback,
+    )
+    counting_reviewer = wrap_provider_for_progress(
+        reviewer_provider,
+        reviewer_counter,
+        progress_callback=progress_callback,
+    )
 
     if mode == BenchmarkMode.SINGLE_AGENT:
         return await run_single_agent_trial(

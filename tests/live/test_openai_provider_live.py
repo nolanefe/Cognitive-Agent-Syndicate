@@ -7,8 +7,7 @@ import os
 import pytest
 
 from cognitive_agent_syndicate.config import ProviderName, build_settings
-from cognitive_agent_syndicate.providers.factory import create_model_provider
-from cognitive_agent_syndicate.schemas import SystemBrief
+from cognitive_agent_syndicate.live_validation.smoke import run_live_provider_smoke
 
 
 @pytest.mark.live
@@ -28,17 +27,14 @@ async def test_openai_provider_live_structured_output_smoke() -> None:
         model=model,
         openai_api_key=api_key_secret.get_secret_value(),
     )
-    provider = create_model_provider(settings)
 
-    result = await provider.generate(
-        system_instructions="Return a concise structured brief.",
-        user_content="Create a one-line offline smoke-test brief.",
-        response_type=SystemBrief,
-    )
+    result = await run_live_provider_smoke(settings)
 
-    assert result.response.title
-    assert result.usage.prompt_tokens >= 0
-    assert result.usage.completion_tokens >= 0
-    assert result.usage.total_tokens >= 0
-    assert result.usage.latency_ms >= 0.0
+    assert result.success is True
+    assert result.model == model
+    assert result.provider == ProviderName.OPENAI.value
+    assert result.prompt_tokens is not None
+    assert result.completion_tokens is not None
+    assert result.total_tokens is not None
+    assert result.latency_ms >= 0.0
     assert api_key_secret.get_secret_value() not in repr(result)

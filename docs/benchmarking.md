@@ -246,3 +246,73 @@ benchmark_results/<benchmark-id>/
 - Static gates are deterministic but not a complete security scanner
 - Same-model reviewer reduces review independence
 - CI never runs live benchmarks
+
+## Automated live validation
+
+Stage 4C adds a one-command live validation workflow that replaces the manual
+export-key → smoke → plan → benchmark → cleanup sequence.
+
+```bash
+python -m cognitive_agent_syndicate validate-live \
+  --task-ids task-url-shortener \
+  --repetitions 3 \
+  --model gpt-5.6-luna \
+  --confirm-live
+```
+
+When `OPENAI_API_KEY` is not already set, the command securely prompts:
+
+```
+OpenAI API key:
+```
+
+Input is hidden (no echo). The key is never passed on the command line, never
+persisted to disk, and never included in reports or `live-validation.json`.
+On every exit path—including success, smoke failure, benchmark failure,
+validation errors, and Ctrl+C—the prior credential environment is restored.
+
+### Workflow
+
+1. **Preflight** — validates dataset, tasks, modes, repetitions (≤ 5 live),
+   model, output path, benchmark ID, and optional git cleanliness.
+2. **Credential acquisition** — uses existing `OPENAI_API_KEY` or prompts once.
+3. **Smoke test** — one structured-output provider call through the production
+   path (`Settings` → `create_model_provider` → `OpenAIModelProvider`). If smoke
+   fails, the benchmark does not start.
+4. **Plan display** — prints trial and provider-call bounds before benchmark
+   provider calls.
+5. **Benchmark execution** — reuses the existing benchmark runner with live
+   progress output at trial boundaries (and provider-call timing when available).
+6. **Handoff** — prints a concise summary and writes `live-validation.json`
+   beside benchmark outputs.
+
+Use `--smoke-only` to run preflight and smoke without starting a benchmark.
+
+Use `--allow-dirty` to override the default refusal to run on a dirty git working
+tree.
+
+### Progress output
+
+During benchmark execution the terminal shows trial progress, for example:
+
+```
+[1/9] single_agent / repetition 1 started
+      provider call 1 completed in 0.0s
+[1/9] completed: completed
+```
+
+Prompts, generated code, API keys, and raw SDK responses are never printed.
+
+### Safety
+
+- `--confirm-live` is required before any live provider call.
+- Generated code execution remains disabled during benchmarks.
+- API usage may incur cost.
+- Pre-run plans do not print monetary cost estimates because future token usage
+  is unknown. When a pricing file is supplied, rates and metadata appear in the
+  plan; actual cost is calculated after execution from observed token usage.
+- Ctrl+C requests graceful cancellation. An in-flight provider call may finish
+  before shutdown completes. Repeated Ctrl+C does not bypass credential cleanup
+  or restore handlers early.
+- Benchmark outputs are written under `benchmark_results/<benchmark-id>/`
+  including `summary.md` and `live-validation.json`.

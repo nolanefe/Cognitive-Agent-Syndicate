@@ -32,9 +32,11 @@ from cognitive_agent_syndicate.providers.factory import (
     validate_provider_configuration,
 )
 from cognitive_agent_syndicate.schemas import SystemBrief
+from cognitive_agent_syndicate.validate_live_cli import register_validate_live_command
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 app.add_typer(benchmark_app, name="benchmark")
+register_validate_live_command(app)
 console = Console()
 
 
