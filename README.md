@@ -1,6 +1,6 @@
 # Cognitive Agent Syndicate
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![CI](https://github.com/nolanefe/cognitive-agent-syndicate/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nolanefe/cognitive-agent-syndicate/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A contract-driven multi-agent software-delivery pipeline with typed outputs, deterministic validation, bounded repair, optional OpenAI integration, and a reproducible benchmark harness.
